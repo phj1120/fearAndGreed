@@ -18,12 +18,18 @@ pip install -r requirements.txt
 
 ### 2. 수동 데이터 수집
 ```bash
+# 전체 히스토리컬 데이터 수집 (초기 설정)
 python data_collector.py
+
+# 당일 데이터만 수집 (일일 업데이트)
+python data_collector.py --daily
 ```
 
 ### 3. 자동 수집 (GitHub Actions)
-- 매일 오전 9시(KST) 자동 실행
+- **매일 오전 9시(KST)** 자동 실행 (daily 모드)
+- **당일 데이터만** 빠르게 수집
 - 새로운 데이터가 있으면 자동으로 커밋 & 푸시
+- 약 1-2분 내 완료 (기존 10분+ → 1-2분으로 단축)
 
 ### 4. 웹 대시보드
 - GitHub Pages를 통한 실시간 차트 대시보드

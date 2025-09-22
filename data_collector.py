@@ -20,12 +20,15 @@ import re
 
 
 class FearGreedCollector:
-    def __init__(self):
+    def __init__(self, daily_mode=False):
         self.data_dir = "data"
         self.stock_csv = os.path.join(self.data_dir, "stock_fear_greed.csv")
         self.crypto_csv = os.path.join(self.data_dir, "crypto_fear_greed.csv")
         self.sp500_csv = os.path.join(self.data_dir, "sp500_index.csv")
         self.nasdaq_csv = os.path.join(self.data_dir, "nasdaq_index.csv")
+
+        # Collection mode: True for daily updates, False for full collection
+        self.daily_mode = daily_mode
 
         # Ensure data directory exists
         os.makedirs(self.data_dir, exist_ok=True)
@@ -112,7 +115,7 @@ class FearGreedCollector:
                 if success:
                     filled_data.append({
                         'date': date.date(),
-                        'fear_greed_value': float(value)
+                        'fear_greed_value': int(round(float(value), 0))
                     })
                     print(f"[SUCCESS] CNN API: {date_str} = {value}")
 
@@ -122,7 +125,7 @@ class FearGreedCollector:
                 if success:
                     filled_data.append({
                         'date': date.date(),
-                        'fear_greed_value': float(value)
+                        'fear_greed_value': int(round(float(value), 0))
                     })
                     print(f"[SUCCESS] MacroMicro: {date_str} = {value}")
 
@@ -132,7 +135,7 @@ class FearGreedCollector:
                 if success:
                     filled_data.append({
                         'date': date.date(),
-                        'fear_greed_value': float(value)
+                        'fear_greed_value': int(round(float(value), 0))
                     })
                     print(f"[SUCCESS] Web Scraping: {date_str} = {value}")
 
@@ -251,6 +254,174 @@ class FearGreedCollector:
 
         return False, None
 
+    def collect_today_stock_fear_greed(self):
+        """
+        Collect only today's stock Fear & Greed data (for daily updates)
+        """
+        try:
+            today = datetime.now().date()
+            print(f"Collecting today's stock Fear & Greed data: {today}")
+
+            # Try to get today's data
+            success, value = self._try_cnn_api_date(pd.to_datetime(today), today.strftime('%Y-%m-%d'))
+
+            if success:
+                new_data = [{
+                    'date': today,
+                    'fear_greed_value': int(round(float(value), 0))
+                }]
+
+                # Load existing data
+                if os.path.exists(self.stock_csv):
+                    df_existing = pd.read_csv(self.stock_csv, encoding='utf-8')
+                    df_existing['date'] = pd.to_datetime(df_existing['date']).dt.date
+
+                    # Remove today's data if already exists
+                    df_existing = df_existing[df_existing['date'] != today]
+
+                    # Add new data
+                    df_new = pd.DataFrame(new_data)
+                    df_combined = pd.concat([df_existing, df_new], ignore_index=True)
+                else:
+                    df_combined = pd.DataFrame(new_data)
+
+                # Sort and save
+                df_combined = df_combined.sort_values('date')
+                df_combined.to_csv(self.stock_csv, index=False, encoding='utf-8')
+
+                print(f"Stock Fear & Greed updated for {today}: {value}")
+                return True
+            else:
+                print(f"Could not fetch stock Fear & Greed data for {today}")
+                return False
+
+        except Exception as e:
+            print(f"Error collecting today's stock Fear & Greed data: {e}")
+            return False
+
+    def collect_today_crypto_fear_greed(self):
+        """
+        Collect only today's crypto Fear & Greed data (for daily updates)
+        """
+        try:
+            today = datetime.now().date()
+            print(f"Collecting today's crypto Fear & Greed data: {today}")
+
+            # Get latest crypto data (Alternative.me always returns recent data)
+            url = "https://api.alternative.me/fng/?limit=1&format=json"
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+
+            data = response.json()
+
+            if not data.get('metadata', {}).get('error') and data.get('data'):
+                latest_item = data['data'][0]
+                item_date = pd.to_datetime(latest_item['timestamp'], unit='s').date()
+
+                # Check if it's today's data
+                if item_date == today:
+                    new_data = [{
+                        'date': today,
+                        'fear_greed_value': int(latest_item['value']),
+                        'classification': latest_item['value_classification']
+                    }]
+
+                    # Load existing data
+                    if os.path.exists(self.crypto_csv):
+                        df_existing = pd.read_csv(self.crypto_csv, encoding='utf-8')
+                        df_existing['date'] = pd.to_datetime(df_existing['date']).dt.date
+
+                        # Remove today's data if already exists
+                        df_existing = df_existing[df_existing['date'] != today]
+
+                        # Add new data
+                        df_new = pd.DataFrame(new_data)
+                        df_combined = pd.concat([df_existing, df_new], ignore_index=True)
+                    else:
+                        df_combined = pd.DataFrame(new_data)
+
+                    # Sort and save
+                    df_combined = df_combined.sort_values('date')
+                    df_combined.to_csv(self.crypto_csv, index=False, encoding='utf-8')
+
+                    print(f"Crypto Fear & Greed updated for {today}: {latest_item['value']}")
+                    return True
+                else:
+                    print(f"Latest crypto data is for {item_date}, not today ({today})")
+                    return False
+
+        except Exception as e:
+            print(f"Error collecting today's crypto Fear & Greed data: {e}")
+            return False
+
+    def collect_today_stock_indices(self):
+        """
+        Collect only today's stock indices data (for daily updates)
+        """
+        try:
+            today = datetime.now().date()
+            yesterday = today - timedelta(days=1)
+
+            print(f"Collecting today's stock indices data: {today}")
+
+            # Get recent data (last 5 days to ensure we get latest trading day)
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=5)
+
+            # S&P 500
+            sp500 = yf.download('^GSPC', start=start_date, end=end_date, progress=False)
+            if not sp500.empty:
+                latest_sp500 = sp500[['Close']].tail(1).reset_index()
+                latest_sp500.columns = ['date', 'close_price']
+                latest_sp500['date'] = latest_sp500['date'].dt.date
+                latest_sp500['close_price'] = latest_sp500['close_price'].round(0).astype(int)
+
+                # Update existing data
+                if os.path.exists(self.sp500_csv):
+                    df_existing = pd.read_csv(self.sp500_csv, encoding='utf-8')
+                    df_existing['date'] = pd.to_datetime(df_existing['date']).dt.date
+
+                    # Remove recent dates and add new data
+                    df_existing = df_existing[df_existing['date'] < yesterday]
+                    df_combined = pd.concat([df_existing, latest_sp500], ignore_index=True)
+                else:
+                    df_combined = latest_sp500
+
+                df_combined = df_combined.sort_values('date')
+                df_combined.to_csv(self.sp500_csv, index=False, encoding='utf-8')
+                print(f"S&P 500 updated: {latest_sp500.iloc[0]['date']} = {latest_sp500.iloc[0]['close_price']:.2f}")
+
+            time.sleep(1)  # Rate limiting
+
+            # NASDAQ
+            nasdaq = yf.download('^IXIC', start=start_date, end=end_date, progress=False)
+            if not nasdaq.empty:
+                latest_nasdaq = nasdaq[['Close']].tail(1).reset_index()
+                latest_nasdaq.columns = ['date', 'close_price']
+                latest_nasdaq['date'] = latest_nasdaq['date'].dt.date
+                latest_nasdaq['close_price'] = latest_nasdaq['close_price'].round(0).astype(int)
+
+                # Update existing data
+                if os.path.exists(self.nasdaq_csv):
+                    df_existing = pd.read_csv(self.nasdaq_csv, encoding='utf-8')
+                    df_existing['date'] = pd.to_datetime(df_existing['date']).dt.date
+
+                    # Remove recent dates and add new data
+                    df_existing = df_existing[df_existing['date'] < yesterday]
+                    df_combined = pd.concat([df_existing, latest_nasdaq], ignore_index=True)
+                else:
+                    df_combined = latest_nasdaq
+
+                df_combined = df_combined.sort_values('date')
+                df_combined.to_csv(self.nasdaq_csv, index=False, encoding='utf-8')
+                print(f"NASDAQ updated: {latest_nasdaq.iloc[0]['date']} = {latest_nasdaq.iloc[0]['close_price']:.2f}")
+
+            return True
+
+        except Exception as e:
+            print(f"Error collecting today's stock indices: {e}")
+            return False
+
     def validate_business_day_data(self, csv_file, data_name):
         """
         Validate that data contains only business days and report statistics
@@ -323,8 +494,9 @@ class FearGreedCollector:
             if 'Fear Greed' in df_historical.columns:
                 df_historical.rename(columns={'Fear Greed': 'fear_greed_value'}, inplace=True)
 
-            # Convert date column
+            # Convert date column and round values
             df_historical['date'] = pd.to_datetime(df_historical['date']).dt.date
+            df_historical['fear_greed_value'] = pd.to_numeric(df_historical['fear_greed_value'], errors='coerce').round(0).astype(int)
             df_historical = df_historical[['date', 'fear_greed_value']].copy()
             df_historical = df_historical.sort_values('date')
 
@@ -380,7 +552,7 @@ class FearGreedCollector:
                 # Convert recent data to DataFrame
                 df_recent = pd.DataFrame(fear_greed_data)
                 df_recent['date'] = pd.to_datetime(df_recent['x'], unit='ms').dt.date
-                df_recent['fear_greed_value'] = df_recent['y']
+                df_recent['fear_greed_value'] = df_recent['y'].round(0).astype(int)
                 df_recent = df_recent[['date', 'fear_greed_value']].copy()
                 df_recent = df_recent.sort_values('date')
 
@@ -404,6 +576,10 @@ class FearGreedCollector:
                 df_combined = pd.concat(dataframes, ignore_index=True)
                 df_combined = df_combined.drop_duplicates(subset=['date'], keep='last')
                 df_combined = df_combined.sort_values('date')
+
+                # Round all values to 1 decimal place first
+                if 'fear_greed_value' in df_combined.columns:
+                    df_combined['fear_greed_value'] = pd.to_numeric(df_combined['fear_greed_value'], errors='coerce').round(0).astype(int)
 
                 # Fill missing business days with REAL data priority
                 print("Filling missing business days for stock Fear & Greed data with REAL data...")
@@ -540,6 +716,7 @@ class FearGreedCollector:
                 sp500_data = sp500[['Close']].reset_index()
                 sp500_data.columns = ['date', 'close_price']
                 sp500_data['date'] = sp500_data['date'].dt.date
+                sp500_data['close_price'] = sp500_data['close_price'].round(0).astype(int)
 
                 # Save S&P 500 data with UTF-8 encoding
                 sp500_data.to_csv(self.sp500_csv, index=False, encoding='utf-8')
@@ -557,6 +734,7 @@ class FearGreedCollector:
                 nasdaq_data = nasdaq[['Close']].reset_index()
                 nasdaq_data.columns = ['date', 'close_price']
                 nasdaq_data['date'] = nasdaq_data['date'].dt.date
+                nasdaq_data['close_price'] = nasdaq_data['close_price'].round(0).astype(int)
 
                 # Save NASDAQ data with UTF-8 encoding
                 nasdaq_data.to_csv(self.nasdaq_csv, index=False, encoding='utf-8')
@@ -573,36 +751,61 @@ class FearGreedCollector:
     def collect_all(self):
         """
         Collect all data: Fear & Greed indices and stock market indices
+        Mode-dependent: Full collection or daily updates only
         """
-        print(f"Starting comprehensive data collection at {datetime.now()}")
+        if self.daily_mode:
+            print(f"Starting DAILY data collection at {datetime.now()}")
+            print("Mode: Collecting only today's data")
 
-        stock_success = self.collect_stock_fear_greed()
-        time.sleep(1)  # Rate limiting
-        crypto_success = self.collect_crypto_fear_greed()
-        time.sleep(1)  # Rate limiting
-        indices_success = self.collect_stock_indices()
+            stock_success = self.collect_today_stock_fear_greed()
+            time.sleep(1)  # Rate limiting
+            crypto_success = self.collect_today_crypto_fear_greed()
+            time.sleep(1)  # Rate limiting
+            indices_success = self.collect_today_stock_indices()
 
-        if stock_success and crypto_success and indices_success:
-            print("All data collection completed successfully")
+            if stock_success and crypto_success and indices_success:
+                print("Daily data collection completed successfully")
+                return True
+            else:
+                print("Some daily data collection failed")
+                return False
 
-            # Validate business day data
-            print("\n" + "="*50)
-            print("Data Validation Report")
-            print("="*50)
-
-            self.validate_business_day_data(self.stock_csv, "Stock Fear & Greed")
-            self.validate_business_day_data(self.crypto_csv, "Crypto Fear & Greed (All Days)")
-            self.validate_business_day_data(self.sp500_csv, "S&P 500 Index")
-            self.validate_business_day_data(self.nasdaq_csv, "NASDAQ Index")
-
-            return True
         else:
-            print("Some data collection failed")
-            return False
+            print(f"Starting FULL data collection at {datetime.now()}")
+            print("Mode: Collecting complete historical data")
+
+            stock_success = self.collect_stock_fear_greed()
+            time.sleep(1)  # Rate limiting
+            crypto_success = self.collect_crypto_fear_greed()
+            time.sleep(1)  # Rate limiting
+            indices_success = self.collect_stock_indices()
+
+            if stock_success and crypto_success and indices_success:
+                print("All data collection completed successfully")
+
+                # Validate business day data (only for full collection)
+                print("\n" + "="*50)
+                print("Data Validation Report")
+                print("="*50)
+
+                self.validate_business_day_data(self.stock_csv, "Stock Fear & Greed")
+                self.validate_business_day_data(self.crypto_csv, "Crypto Fear & Greed (All Days)")
+                self.validate_business_day_data(self.sp500_csv, "S&P 500 Index")
+                self.validate_business_day_data(self.nasdaq_csv, "NASDAQ Index")
+
+                return True
+            else:
+                print("Some data collection failed")
+                return False
 
 
 if __name__ == "__main__":
-    collector = FearGreedCollector()
+    import sys
+
+    # Check if daily mode is requested
+    daily_mode = len(sys.argv) > 1 and sys.argv[1] == "--daily"
+
+    collector = FearGreedCollector(daily_mode=daily_mode)
     success = collector.collect_all()
 
     if not success:

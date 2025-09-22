@@ -24,9 +24,9 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Collect Fear & Greed data
+    - name: Collect Fear & Greed data (Daily Mode)
       run: |
-        python data_collector.py
+        python data_collector.py --daily
 
     - name: Copy CSV files to docs folder
       run: |
