@@ -136,34 +136,16 @@ class FearGreedDashboard {
             }
         }
 
-        // Add Fear & Greed dataset
+        // Add Fear & Greed dataset with colored segments
         if (showFearGreed) {
             const fearGreedValues = commonDates.map(date => {
                 const item = this.stockData.find(d => d.date === date);
                 return item ? parseInt(item.fear_greed_value) : null;
             });
 
-            // Create color array for each point based on Fear & Greed value
-            const pointColors = fearGreedValues.map(value => {
-                if (value === null) return '#3b82f6';
-                return this.getFearGreedColor(value);
-            });
-
-            datasets.push({
-                label: 'Fear & Greed 지수',
-                data: fearGreedValues,
-                borderColor: '#3b82f6',
-                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                borderWidth: 3,
-                fill: false,
-                tension: 0.1,
-                yAxisID: 'y',
-                pointBackgroundColor: pointColors,
-                pointBorderColor: pointColors,
-                pointBorderWidth: 2,
-                pointRadius: 4,
-                pointHoverRadius: 6
-            });
+            // Create colored line segments based on Fear & Greed values
+            const fearGreedSegments = this.createColoredSegments(fearGreedValues, commonDates);
+            datasets.push(...fearGreedSegments);
         }
 
         // Add S&P 500 dataset (normalized)
@@ -173,12 +155,16 @@ class FearGreedDashboard {
                 return item ? parseFloat(item.close_price) : null;
             });
 
-            // Normalize to 0-100 scale
-            const sp500Base = sp500Values.find(v => v !== null);
+            // Normalize to 0-100 scale using min-max normalization
+            const validSP500Values = sp500Values.filter(v => v !== null);
+            const sp500Min = Math.min(...validSP500Values);
+            const sp500Max = Math.max(...validSP500Values);
+            const sp500Range = sp500Max - sp500Min;
+
             const sp500Normalized = sp500Values.map(val => {
-                if (!val || !sp500Base) return null;
-                const pctChange = ((val - sp500Base) / sp500Base) * 100;
-                return Math.max(0, Math.min(100, 50 + pctChange * 1.5));
+                if (!val) return null;
+                // Scale to 10-90 range to stay within chart bounds with some padding
+                return 10 + ((val - sp500Min) / sp500Range) * 80;
             });
 
             datasets.push({
@@ -200,12 +186,16 @@ class FearGreedDashboard {
                 return item ? parseFloat(item.close_price) : null;
             });
 
-            // Normalize to 0-100 scale
-            const nasdaqBase = nasdaqValues.find(v => v !== null);
+            // Normalize to 0-100 scale using min-max normalization
+            const validNasdaqValues = nasdaqValues.filter(v => v !== null);
+            const nasdaqMin = Math.min(...validNasdaqValues);
+            const nasdaqMax = Math.max(...validNasdaqValues);
+            const nasdaqRange = nasdaqMax - nasdaqMin;
+
             const nasdaqNormalized = nasdaqValues.map(val => {
-                if (!val || !nasdaqBase) return null;
-                const pctChange = ((val - nasdaqBase) / nasdaqBase) * 100;
-                return Math.max(0, Math.min(100, 50 + pctChange * 1.5));
+                if (!val) return null;
+                // Scale to 10-90 range to stay within chart bounds with some padding
+                return 10 + ((val - nasdaqMin) / nasdaqRange) * 80;
             });
 
             datasets.push({
@@ -249,30 +239,14 @@ class FearGreedDashboard {
             data = data.slice(-days);
         }
 
-        // Add Crypto Fear & Greed dataset
+        // Add Crypto Fear & Greed dataset with colored segments
         if (showFearGreed) {
             const fearGreedValues = data.map(d => parseInt(d.fear_greed_value));
+            const dates = data.map(d => d.date);
 
-            // Create color array for each point based on Fear & Greed value
-            const pointColors = fearGreedValues.map(value => {
-                if (value === null || isNaN(value)) return '#f59e0b';
-                return this.getFearGreedColor(value);
-            });
-
-            datasets.push({
-                label: '암호화폐 Fear & Greed 지수',
-                data: fearGreedValues,
-                borderColor: '#f59e0b',
-                backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                borderWidth: 3,
-                fill: true,
-                tension: 0.1,
-                pointBackgroundColor: pointColors,
-                pointBorderColor: pointColors,
-                pointBorderWidth: 2,
-                pointRadius: 4,
-                pointHoverRadius: 6
-            });
+            // Create colored line segments based on Fear & Greed values
+            const fearGreedSegments = this.createColoredSegments(fearGreedValues, dates, true);
+            datasets.push(...fearGreedSegments);
         }
 
         this.cryptoChart = new Chart(ctx, {
@@ -283,6 +257,91 @@ class FearGreedDashboard {
             },
             options: this.getChartOptions('암호화폐 Fear & Greed 지수')
         });
+    }
+
+    createColoredSegments(values, dates, isCrypto = false) {
+        const segments = [];
+
+        // Create segments for consecutive points of the same color category
+        let currentSegment = [];
+        let currentCategory = null;
+
+        for (let i = 0; i < values.length; i++) {
+            const value = values[i];
+            if (value === null || isNaN(value)) {
+                // End current segment if we hit a null value
+                if (currentSegment.length > 0) {
+                    segments.push(this.createSegmentDataset(currentSegment, dates, currentCategory, isCrypto));
+                    currentSegment = [];
+                    currentCategory = null;
+                }
+                continue;
+            }
+
+            const category = this.getFearGreedCategory(value);
+
+            if (currentCategory !== category) {
+                // Category changed, end current segment and start new one
+                if (currentSegment.length > 0) {
+                    segments.push(this.createSegmentDataset(currentSegment, dates, currentCategory, isCrypto));
+                }
+                currentSegment = [{ index: i, value: value }];
+                currentCategory = category;
+            } else {
+                // Same category, add to current segment
+                currentSegment.push({ index: i, value: value });
+            }
+        }
+
+        // Don't forget the last segment
+        if (currentSegment.length > 0) {
+            segments.push(this.createSegmentDataset(currentSegment, dates, currentCategory, isCrypto));
+        }
+
+        return segments;
+    }
+
+    createSegmentDataset(segment, dates, category, isCrypto) {
+        const segmentData = new Array(dates.length).fill(null);
+
+        // Fill in the values for this segment
+        segment.forEach(point => {
+            segmentData[point.index] = point.value;
+        });
+
+        const color = this.getFearGreedColor(segment[0].value);
+        const label = isCrypto ? '암호화폐 Fear & Greed' : 'Fear & Greed 지수';
+        const interpretation = this.getFearGreedLabel(segment[0].value);
+
+        return {
+            label: `${label} (${interpretation})`,
+            data: segmentData,
+            borderColor: color,
+            backgroundColor: isCrypto ? this.hexToRgba(color, 0.1) : 'transparent',
+            borderWidth: 3,
+            fill: isCrypto,
+            tension: 0.1,
+            pointRadius: 2,
+            pointHoverRadius: 6,
+            pointBackgroundColor: color,
+            pointBorderColor: color,
+            spanGaps: false
+        };
+    }
+
+    getFearGreedCategory(value) {
+        if (value <= 24) return 'extreme-fear';
+        if (value <= 44) return 'fear';
+        if (value <= 55) return 'neutral';
+        if (value <= 75) return 'greed';
+        return 'extreme-greed';
+    }
+
+    hexToRgba(hex, alpha) {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     }
 
     setupEventListeners() {
@@ -327,17 +386,50 @@ class FearGreedDashboard {
                 },
                 tooltip: {
                     callbacks: {
-                        afterLabel: (context) => {
-                            // Add Fear & Greed interpretation for Fear & Greed datasets
-                            if (context.dataset.label.includes('Fear & Greed')) {
-                                const value = context.parsed.y;
+                        title: (context) => {
+                            // Show formatted date
+                            const date = context[0].label;
+                            return new Date(date).toLocaleDateString('ko-KR', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                                weekday: 'short'
+                            });
+                        },
+                        label: (context) => {
+                            const value = context.parsed.y;
+                            const datasetLabel = context.dataset.label;
+
+                            if (datasetLabel.includes('Fear & Greed')) {
                                 if (value !== null && !isNaN(value)) {
-                                    return `해석: ${this.getFearGreedLabel(value)}`;
+                                    return [
+                                        `${datasetLabel}: ${value}`,
+                                        `해석: ${this.getFearGreedLabel(value)}`
+                                    ];
                                 }
+                            } else if (datasetLabel.includes('정규화')) {
+                                return `${datasetLabel}: ${value ? value.toFixed(1) : 'N/A'}`;
                             }
-                            return '';
+
+                            return `${datasetLabel}: ${value}`;
+                        },
+                        labelColor: (context) => {
+                            return {
+                                borderColor: context.dataset.borderColor,
+                                backgroundColor: context.dataset.borderColor
+                            };
                         }
-                    }
+                    },
+                    displayColors: true,
+                    titleFont: {
+                        size: 14,
+                        weight: 'bold'
+                    },
+                    bodyFont: {
+                        size: 13
+                    },
+                    padding: 12,
+                    cornerRadius: 8
                 }
             },
             scales: {
