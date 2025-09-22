@@ -299,3 +299,134 @@ footer p {
 .mb-4 {
     margin-bottom: 1rem;
 }
+
+/* Chart Controls */
+.chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.chart-header h3 {
+    margin: 0;
+    color: #1e293b;
+    font-size: 1.25rem;
+}
+
+.chart-controls {
+    display: flex;
+    gap: 2rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.period-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.period-controls label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #64748b;
+}
+
+.period-controls select {
+    padding: 0.25rem 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    background: white;
+    color: #374151;
+    cursor: pointer;
+}
+
+.period-controls select:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.data-toggles {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.data-toggles > label:first-child {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #64748b;
+    margin-right: 0.5rem;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: #374151;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: relative;
+    display: inline-block;
+    width: 34px;
+    height: 20px;
+    background-color: #ccc;
+    border-radius: 34px;
+    transition: .4s;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 2px;
+    bottom: 2px;
+    background-color: white;
+    border-radius: 50%;
+    transition: .4s;
+}
+
+.toggle-switch input:checked + .slider {
+    background-color: #3b82f6;
+}
+
+.toggle-switch input:checked + .slider:before {
+    transform: translateX(14px);
+}
+
+/* Responsive Chart Controls */
+@media (max-width: 768px) {
+    .chart-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .chart-controls {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+        width: 100%;
+    }
+
+    .data-toggles {
+        gap: 0.75rem;
+    }
+}

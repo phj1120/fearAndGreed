@@ -35,52 +35,73 @@
 
             <!-- 차트 컨테이너 -->
             <div class="charts-container">
+                <!-- 주식 관련 차트 -->
                 <div class="chart-section">
-                    <h3>📈 주식 Fear & Greed 지수 추이</h3>
+                    <div class="chart-header">
+                        <h3>📈 주식 관련 지수</h3>
+                        <div class="chart-controls">
+                            <div class="period-controls">
+                                <label>기간:</label>
+                                <select id="stockPeriod">
+                                    <option value="30">최근 30일</option>
+                                    <option value="90" selected>최근 90일</option>
+                                    <option value="180">최근 180일</option>
+                                    <option value="365">최근 1년</option>
+                                    <option value="all">전체</option>
+                                </select>
+                            </div>
+                            <div class="data-toggles">
+                                <label>표시할 데이터:</label>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="showStockFearGreed" checked>
+                                    <span class="slider"></span>
+                                    Fear & Greed
+                                </label>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="showSP500" checked>
+                                    <span class="slider"></span>
+                                    S&P 500
+                                </label>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="showNASDAQ" checked>
+                                    <span class="slider"></span>
+                                    NASDAQ
+                                </label>
+                            </div>
+                        </div>
+                    </div>
                     <div class="chart-wrapper">
                         <canvas id="stockChart"></canvas>
                     </div>
                 </div>
 
+                <!-- 암호화폐 관련 차트 -->
                 <div class="chart-section">
-                    <h3>₿ 암호화폐 Fear & Greed 지수 추이</h3>
+                    <div class="chart-header">
+                        <h3>₿ 암호화폐 관련 지수</h3>
+                        <div class="chart-controls">
+                            <div class="period-controls">
+                                <label>기간:</label>
+                                <select id="cryptoPeriod">
+                                    <option value="30">최근 30일</option>
+                                    <option value="90" selected>최근 90일</option>
+                                    <option value="180">최근 180일</option>
+                                    <option value="365">최근 1년</option>
+                                    <option value="all">전체</option>
+                                </select>
+                            </div>
+                            <div class="data-toggles">
+                                <label>표시할 데이터:</label>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="showCryptoFearGreed" checked>
+                                    <span class="slider"></span>
+                                    Fear & Greed
+                                </label>
+                            </div>
+                        </div>
+                    </div>
                     <div class="chart-wrapper">
                         <canvas id="cryptoChart"></canvas>
-                    </div>
-                </div>
-
-                <div class="chart-section">
-                    <h3>📊 주식 vs 암호화폐 비교</h3>
-                    <div class="chart-wrapper">
-                        <canvas id="comparisonChart"></canvas>
-                    </div>
-                </div>
-
-                <div class="chart-section">
-                    <h3>📈 S&P 500 지수 추이</h3>
-                    <div class="chart-wrapper">
-                        <canvas id="sp500Chart"></canvas>
-                    </div>
-                </div>
-
-                <div class="chart-section">
-                    <h3>📈 NASDAQ 지수 추이</h3>
-                    <div class="chart-wrapper">
-                        <canvas id="nasdaqChart"></canvas>
-                    </div>
-                </div>
-
-                <div class="chart-section">
-                    <h3>📊 Fear & Greed vs 주식 지수</h3>
-                    <div class="chart-wrapper">
-                        <canvas id="fearGreedVsIndicesChart"></canvas>
-                    </div>
-                </div>
-
-                <div class="chart-section">
-                    <h3>📊 주요 지수 비교</h3>
-                    <div class="chart-wrapper">
-                        <canvas id="indicesComparisonChart"></canvas>
                     </div>
                 </div>
             </div>
