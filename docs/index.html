@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fear & Greed Index Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Fear & Greed Index Dashboard</h1>
+            <p>투자 심리 지표를 통한 시장 분석</p>
+        </header>
+
+        <div class="dashboard">
+            <!-- 현재 지수 카드 -->
+            <div class="metrics-cards">
+                <div class="metric-card stock">
+                    <h3>📈 주식 Fear & Greed</h3>
+                    <div class="metric-value" id="stock-current">-</div>
+                    <div class="metric-label" id="stock-label">Loading...</div>
+                    <div class="metric-date" id="stock-date">-</div>
+                </div>
+
+                <div class="metric-card crypto">
+                    <h3>₿ 암호화폐 Fear & Greed</h3>
+                    <div class="metric-value" id="crypto-current">-</div>
+                    <div class="metric-label" id="crypto-label">Loading...</div>
+                    <div class="metric-date" id="crypto-date">-</div>
+                </div>
+            </div>
+
+            <!-- 차트 컨테이너 -->
+            <div class="charts-container">
+                <div class="chart-section">
+                    <h3>📈 주식 Fear & Greed 지수 추이</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="stockChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-section">
+                    <h3>₿ 암호화폐 Fear & Greed 지수 추이</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="cryptoChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-section">
+                    <h3>📊 주식 vs 암호화폐 비교</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="comparisonChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-section">
+                    <h3>📈 S&P 500 지수 추이</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="sp500Chart"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-section">
+                    <h3>📈 NASDAQ 지수 추이</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="nasdaqChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-section">
+                    <h3>📊 주요 지수 비교</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="indicesComparisonChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 범례 -->
+            <div class="legend-section">
+                <h3>📖 Fear & Greed 지수 해석</h3>
+                <div class="legend-grid">
+                    <div class="legend-item extreme-fear">
+                        <div class="legend-color"></div>
+                        <div class="legend-text">
+                            <strong>0-24: 극도의 공포</strong>
+                            <span>매수 기회일 가능성</span>
+                        </div>
+                    </div>
+                    <div class="legend-item fear">
+                        <div class="legend-color"></div>
+                        <div class="legend-text">
+                            <strong>25-44: 공포</strong>
+                            <span>시장 비관적</span>
+                        </div>
+                    </div>
+                    <div class="legend-item neutral">
+                        <div class="legend-color"></div>
+                        <div class="legend-text">
+                            <strong>45-55: 중립</strong>
+                            <span>균형 상태</span>
+                        </div>
+                    </div>
+                    <div class="legend-item greed">
+                        <div class="legend-color"></div>
+                        <div class="legend-text">
+                            <strong>56-75: 탐욕</strong>
+                            <span>시장 낙관적</span>
+                        </div>
+                    </div>
+                    <div class="legend-item extreme-greed">
+                        <div class="legend-color"></div>
+                        <div class="legend-text">
+                            <strong>76-100: 극도의 탐욕</strong>
+                            <span>매도 고려 시점</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>데이터 출처: CNN Fear & Greed Index, Alternative.me | 주식: 거래일만, 암호화폐: 전체 날짜</p>
+            <p>마지막 업데이트: <span id="last-update">-</span></p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
