@@ -12,6 +12,7 @@ class FearGreedDashboard {
         this.sp500Chart = null;
         this.nasdaqChart = null;
         this.indicesComparisonChart = null;
+        this.fearGreedVsIndicesChart = null;
 
         this.init();
     }
@@ -124,6 +125,7 @@ class FearGreedDashboard {
         this.renderComparisonChart();
         this.renderSP500Chart();
         this.renderNasdaqChart();
+        this.renderFearGreedVsIndicesChart();
         this.renderIndicesComparisonChart();
     }
 
@@ -267,6 +269,140 @@ class FearGreedDashboard {
                 }]
             },
             options: this.getStockChartOptions('NASDAQ 지수')
+        });
+    }
+
+    renderFearGreedVsIndicesChart() {
+        const ctx = document.getElementById('fearGreedVsIndicesChart').getContext('2d');
+
+        // Find common dates between stock Fear & Greed and indices (last 180 days)
+        const stockDates = new Set(this.stockData.map(d => d.date));
+        const sp500Dates = new Set(this.sp500Data.map(d => d.date));
+        const nasdaqDates = new Set(this.nasdaqData.map(d => d.date));
+
+        const commonDates = [...stockDates]
+            .filter(date => sp500Dates.has(date) && nasdaqDates.has(date))
+            .slice(-180);
+
+        // Get Fear & Greed data for common dates
+        const fearGreedValues = commonDates.map(date => {
+            const item = this.stockData.find(d => d.date === date);
+            return item ? parseInt(item.fear_greed_value) : null;
+        });
+
+        // Get normalized stock indices data (percentage change from first value)
+        const sp500Values = commonDates.map(date => {
+            const item = this.sp500Data.find(d => d.date === date);
+            return item ? parseFloat(item.close_price) : null;
+        });
+
+        const nasdaqValues = commonDates.map(date => {
+            const item = this.nasdaqData.find(d => d.date === date);
+            return item ? parseFloat(item.close_price) : null;
+        });
+
+        // Normalize indices to 0-100 scale for comparison
+        const sp500Base = sp500Values[0];
+        const nasdaqBase = nasdaqValues[0];
+
+        // Convert to percentage change and scale to 0-100 range
+        const sp500Normalized = sp500Values.map(val => {
+            if (!val) return null;
+            const pctChange = ((val - sp500Base) / sp500Base) * 100;
+            // Scale to roughly 0-100 range (adjust multiplier as needed)
+            return Math.max(0, Math.min(100, 50 + pctChange * 2));
+        });
+
+        const nasdaqNormalized = nasdaqValues.map(val => {
+            if (!val) return null;
+            const pctChange = ((val - nasdaqBase) / nasdaqBase) * 100;
+            // Scale to roughly 0-100 range (adjust multiplier as needed)
+            return Math.max(0, Math.min(100, 50 + pctChange * 2));
+        });
+
+        this.fearGreedVsIndicesChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: commonDates,
+                datasets: [
+                    {
+                        label: 'Fear & Greed 지수',
+                        data: fearGreedValues,
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 3,
+                        fill: false,
+                        tension: 0.1,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'S&P 500 (정규화)',
+                        data: sp500Normalized,
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        borderWidth: 2,
+                        fill: false,
+                        tension: 0.1,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'NASDAQ (정규화)',
+                        data: nasdaqNormalized,
+                        borderColor: '#8b5cf6',
+                        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                        borderWidth: 2,
+                        fill: false,
+                        tension: 0.1,
+                        yAxisID: 'y'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: false
+                    },
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                return value;
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: '지수 값 / 정규화된 값'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            maxTicksLimit: 8,
+                            callback: function(value, index, values) {
+                                const date = this.getLabelForValue(value);
+                                return new Date(date).toLocaleDateString('ko-KR', {
+                                    month: 'short',
+                                    day: 'numeric'
+                                });
+                            }
+                        }
+                    }
+                }
+            }
         });
     }
 
