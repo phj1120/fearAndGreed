@@ -9,7 +9,8 @@
       "WebSearch",
       "Bash(timeout 180 python data_collector.py)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []

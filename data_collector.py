@@ -26,6 +26,10 @@ class FearGreedCollector:
         self.crypto_csv = os.path.join(self.data_dir, "crypto_fear_greed.csv")
         self.sp500_csv = os.path.join(self.data_dir, "sp500_index.csv")
         self.nasdaq_csv = os.path.join(self.data_dir, "nasdaq_index.csv")
+        self.btc_csv = os.path.join(self.data_dir, "btc_price.csv")
+        self.eth_csv = os.path.join(self.data_dir, "eth_price.csv")
+        self.sol_csv = os.path.join(self.data_dir, "sol_price.csv")
+        self.xrp_csv = os.path.join(self.data_dir, "xrp_price.csv")
 
         # Collection mode: True for daily updates, False for full collection
         self.daily_mode = daily_mode
@@ -762,8 +766,9 @@ class FearGreedCollector:
             crypto_success = self.collect_today_crypto_fear_greed()
             time.sleep(1)  # Rate limiting
             indices_success = self.collect_today_stock_indices()
+            crypto_prices_success = self.collect_today_crypto_prices()
 
-            if stock_success and crypto_success and indices_success:
+            if stock_success and crypto_success and indices_success and crypto_prices_success:
                 print("Daily data collection completed successfully")
                 return True
             else:
@@ -779,8 +784,9 @@ class FearGreedCollector:
             crypto_success = self.collect_crypto_fear_greed()
             time.sleep(1)  # Rate limiting
             indices_success = self.collect_stock_indices()
+            crypto_prices_success = self.collect_crypto_prices()
 
-            if stock_success and crypto_success and indices_success:
+            if stock_success and crypto_success and indices_success and crypto_prices_success:
                 print("All data collection completed successfully")
 
                 # Validate business day data (only for full collection)
@@ -792,11 +798,137 @@ class FearGreedCollector:
                 self.validate_business_day_data(self.crypto_csv, "Crypto Fear & Greed (All Days)")
                 self.validate_business_day_data(self.sp500_csv, "S&P 500 Index")
                 self.validate_business_day_data(self.nasdaq_csv, "NASDAQ Index")
+                self.validate_business_day_data(self.btc_csv, "Bitcoin (All Days)")
+                self.validate_business_day_data(self.eth_csv, "Ethereum (All Days)")
+                self.validate_business_day_data(self.sol_csv, "Solana (All Days)")
+                self.validate_business_day_data(self.xrp_csv, "Ripple (All Days)")
 
                 return True
             else:
                 print("Some data collection failed")
                 return False
+
+    def collect_crypto_prices(self):
+        """
+        Collect historical cryptocurrency prices using CoinGecko API
+        """
+        print("Collecting cryptocurrency prices...")
+
+        cryptos = {
+            'bitcoin': {'symbol': 'BTC', 'csv': self.btc_csv},
+            'ethereum': {'symbol': 'ETH', 'csv': self.eth_csv},
+            'solana': {'symbol': 'SOL', 'csv': self.sol_csv},
+            'ripple': {'symbol': 'XRP', 'csv': self.xrp_csv}
+        }
+
+        all_success = True
+
+        for coin_id, info in cryptos.items():
+            try:
+                print(f"Fetching {info['symbol']} data...")
+
+                # CoinGecko API for historical data (365 days)
+                url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart"
+                params = {
+                    'vs_currency': 'usd',
+                    'days': '365',
+                    'interval': 'daily'
+                }
+
+                response = requests.get(url, params=params, timeout=30)
+                response.raise_for_status()
+                data = response.json()
+
+                # Parse price data
+                prices = data['prices']
+                price_data = []
+
+                for timestamp, price in prices:
+                    date = pd.to_datetime(timestamp, unit='ms').strftime('%Y-%m-%d')
+                    price_data.append({
+                        'date': date,
+                        'price': round(price, 2)
+                    })
+
+                # Create DataFrame and save
+                df = pd.DataFrame(price_data)
+                df = df.drop_duplicates('date').sort_values('date')
+
+                # Load existing data if it exists
+                if os.path.exists(info['csv']):
+                    existing_df = pd.read_csv(info['csv'])
+                    # Merge with existing data, keeping new data for overlapping dates
+                    df = pd.concat([existing_df, df]).drop_duplicates('date', keep='last').sort_values('date')
+
+                df.to_csv(info['csv'], index=False, encoding='utf-8')
+                print(f"{info['symbol']} data saved successfully ({len(df)} records)")
+
+                time.sleep(1)  # Rate limiting
+
+            except Exception as e:
+                print(f"Failed to collect {info['symbol']} data: {e}")
+                all_success = False
+
+        return all_success
+
+    def collect_today_crypto_prices(self):
+        """
+        Collect today's cryptocurrency prices using CoinGecko API
+        """
+        print("Collecting today's cryptocurrency prices...")
+
+        cryptos = {
+            'bitcoin': {'symbol': 'BTC', 'csv': self.btc_csv},
+            'ethereum': {'symbol': 'ETH', 'csv': self.eth_csv},
+            'solana': {'symbol': 'SOL', 'csv': self.sol_csv},
+            'ripple': {'symbol': 'XRP', 'csv': self.xrp_csv}
+        }
+
+        all_success = True
+        today = datetime.now().strftime('%Y-%m-%d')
+
+        for coin_id, info in cryptos.items():
+            try:
+                print(f"Fetching today's {info['symbol']} price...")
+
+                # CoinGecko API for current price
+                url = f"https://api.coingecko.com/api/v3/simple/price"
+                params = {
+                    'ids': coin_id,
+                    'vs_currencies': 'usd'
+                }
+
+                response = requests.get(url, params=params, timeout=30)
+                response.raise_for_status()
+                data = response.json()
+
+                current_price = round(data[coin_id]['usd'], 2)
+
+                # Load existing data or create new
+                if os.path.exists(info['csv']):
+                    df = pd.read_csv(info['csv'])
+                else:
+                    df = pd.DataFrame(columns=['date', 'price'])
+
+                # Update today's data
+                df = df[df['date'] != today]  # Remove existing today's data
+                new_row = pd.DataFrame({
+                    'date': [today],
+                    'price': [current_price]
+                })
+                df = pd.concat([df, new_row], ignore_index=True)
+                df = df.sort_values('date')
+
+                df.to_csv(info['csv'], index=False, encoding='utf-8')
+                print(f"{info['symbol']} updated: {today} = ${current_price}")
+
+                time.sleep(1)  # Rate limiting
+
+            except Exception as e:
+                print(f"Failed to collect today's {info['symbol']} price: {e}")
+                all_success = False
+
+        return all_success
 
 
 if __name__ == "__main__":

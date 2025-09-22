@@ -6,6 +6,10 @@ class FearGreedDashboard {
         this.cryptoData = [];
         this.sp500Data = [];
         this.nasdaqData = [];
+        this.btcData = [];
+        this.ethData = [];
+        this.solData = [];
+        this.xrpData = [];
         this.stockChart = null;
         this.cryptoChart = null;
 
@@ -46,6 +50,23 @@ class FearGreedDashboard {
             const nasdaqResponse = await fetch('./data/nasdaq_index.csv');
             const nasdaqText = await nasdaqResponse.text();
             this.nasdaqData = this.parseCSV(nasdaqText);
+
+            // Load cryptocurrency price data
+            const btcResponse = await fetch('./data/btc_price.csv');
+            const btcText = await btcResponse.text();
+            this.btcData = this.parseCSV(btcText);
+
+            const ethResponse = await fetch('./data/eth_price.csv');
+            const ethText = await ethResponse.text();
+            this.ethData = this.parseCSV(ethText);
+
+            const solResponse = await fetch('./data/sol_price.csv');
+            const solText = await solResponse.text();
+            this.solData = this.parseCSV(solText);
+
+            const xrpResponse = await fetch('./data/xrp_price.csv');
+            const xrpText = await xrpResponse.text();
+            this.xrpData = this.parseCSV(xrpText);
 
         } catch (error) {
             console.error('Error loading data:', error);
@@ -229,33 +250,146 @@ class FearGreedDashboard {
 
         const period = document.getElementById('cryptoPeriod').value;
         const showFearGreed = document.getElementById('showCryptoFearGreed').checked;
+        const showBTC = document.getElementById('showBTC').checked;
+        const showETH = document.getElementById('showETH').checked;
+        const showSOL = document.getElementById('showSOL').checked;
+        const showXRP = document.getElementById('showXRP').checked;
 
         const datasets = [];
-        let data = this.cryptoData;
+        let commonDates = [];
 
-        // Apply period filter
-        if (period !== 'all') {
-            const days = parseInt(period);
-            data = data.slice(-days);
+        // Get common dates if we're showing cryptocurrency prices
+        if (showBTC || showETH || showSOL || showXRP || showFearGreed) {
+            const cryptoDates = new Set(this.cryptoData.map(d => d.date));
+            const btcDates = new Set(this.btcData.map(d => d.date));
+            const ethDates = new Set(this.ethData.map(d => d.date));
+            const solDates = new Set(this.solData.map(d => d.date));
+            const xrpDates = new Set(this.xrpData.map(d => d.date));
+
+            commonDates = [...cryptoDates].filter(date => {
+                let include = true;
+                if (showBTC) include = include && btcDates.has(date);
+                if (showETH) include = include && ethDates.has(date);
+                if (showSOL) include = include && solDates.has(date);
+                if (showXRP) include = include && xrpDates.has(date);
+                return include;
+            });
+
+            // Apply period filter
+            if (period !== 'all') {
+                const days = parseInt(period);
+                commonDates = commonDates.slice(-days);
+            }
+        } else {
+            // Just use crypto fear & greed dates
+            let data = this.cryptoData;
+            if (period !== 'all') {
+                const days = parseInt(period);
+                data = data.slice(-days);
+            }
+            commonDates = data.map(d => d.date);
         }
 
         // Add Crypto Fear & Greed dataset with colored segments
         if (showFearGreed) {
-            const fearGreedValues = data.map(d => parseInt(d.fear_greed_value));
-            const dates = data.map(d => d.date);
+            const fearGreedValues = commonDates.map(date => {
+                const item = this.cryptoData.find(d => d.date === date);
+                return item ? parseInt(item.fear_greed_value) : null;
+            });
 
             // Create colored line segments based on Fear & Greed values
-            const fearGreedSegments = this.createColoredSegments(fearGreedValues, dates, true);
+            const fearGreedSegments = this.createColoredSegments(fearGreedValues, commonDates, true);
             datasets.push(...fearGreedSegments);
+        }
+
+        // Add cryptocurrency price datasets (normalized)
+        if (showBTC) {
+            const btcValues = commonDates.map(date => {
+                const item = this.btcData.find(d => d.date === date);
+                return item ? parseFloat(item.price) : null;
+            });
+
+            const btcNormalized = this.normalizePriceToFearGreedScale(btcValues);
+            datasets.push({
+                label: 'Bitcoin (정규화)',
+                data: btcNormalized,
+                borderColor: '#f7931a',
+                backgroundColor: 'rgba(247, 147, 26, 0.1)',
+                borderWidth: 2,
+                fill: false,
+                tension: 0.1,
+                pointRadius: 2,
+                pointHoverRadius: 4
+            });
+        }
+
+        if (showETH) {
+            const ethValues = commonDates.map(date => {
+                const item = this.ethData.find(d => d.date === date);
+                return item ? parseFloat(item.price) : null;
+            });
+
+            const ethNormalized = this.normalizePriceToFearGreedScale(ethValues);
+            datasets.push({
+                label: 'Ethereum (정규화)',
+                data: ethNormalized,
+                borderColor: '#627eea',
+                backgroundColor: 'rgba(98, 126, 234, 0.1)',
+                borderWidth: 2,
+                fill: false,
+                tension: 0.1,
+                pointRadius: 2,
+                pointHoverRadius: 4
+            });
+        }
+
+        if (showSOL) {
+            const solValues = commonDates.map(date => {
+                const item = this.solData.find(d => d.date === date);
+                return item ? parseFloat(item.price) : null;
+            });
+
+            const solNormalized = this.normalizePriceToFearGreedScale(solValues);
+            datasets.push({
+                label: 'Solana (정규화)',
+                data: solNormalized,
+                borderColor: '#9945ff',
+                backgroundColor: 'rgba(153, 69, 255, 0.1)',
+                borderWidth: 2,
+                fill: false,
+                tension: 0.1,
+                pointRadius: 2,
+                pointHoverRadius: 4
+            });
+        }
+
+        if (showXRP) {
+            const xrpValues = commonDates.map(date => {
+                const item = this.xrpData.find(d => d.date === date);
+                return item ? parseFloat(item.price) : null;
+            });
+
+            const xrpNormalized = this.normalizePriceToFearGreedScale(xrpValues);
+            datasets.push({
+                label: 'Ripple (정규화)',
+                data: xrpNormalized,
+                borderColor: '#23292f',
+                backgroundColor: 'rgba(35, 41, 47, 0.1)',
+                borderWidth: 2,
+                fill: false,
+                tension: 0.1,
+                pointRadius: 2,
+                pointHoverRadius: 4
+            });
         }
 
         this.cryptoChart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: data.map(d => d.date),
+                labels: commonDates,
                 datasets: datasets
             },
-            options: this.getChartOptions('암호화폐 Fear & Greed 지수')
+            options: this.getChartOptions('암호화폐 관련 지수')
         });
     }
 
@@ -344,6 +478,21 @@ class FearGreedDashboard {
         return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     }
 
+    normalizePriceToFearGreedScale(values) {
+        const validValues = values.filter(v => v !== null && !isNaN(v));
+        if (validValues.length === 0) return values;
+
+        const min = Math.min(...validValues);
+        const max = Math.max(...validValues);
+        const range = max - min;
+
+        return values.map(val => {
+            if (val === null || isNaN(val)) return null;
+            // Scale to 10-90 range to stay within chart bounds with some padding
+            return 10 + ((val - min) / range) * 80;
+        });
+    }
+
     setupEventListeners() {
         // Period selectors
         document.getElementById('stockPeriod').addEventListener('change', () => {
@@ -368,6 +517,22 @@ class FearGreedDashboard {
         });
 
         document.getElementById('showCryptoFearGreed').addEventListener('change', () => {
+            this.renderCryptoChart();
+        });
+
+        document.getElementById('showBTC').addEventListener('change', () => {
+            this.renderCryptoChart();
+        });
+
+        document.getElementById('showETH').addEventListener('change', () => {
+            this.renderCryptoChart();
+        });
+
+        document.getElementById('showSOL').addEventListener('change', () => {
+            this.renderCryptoChart();
+        });
+
+        document.getElementById('showXRP').addEventListener('change', () => {
             this.renderCryptoChart();
         });
     }
@@ -409,6 +574,27 @@ class FearGreedDashboard {
                                 }
                             } else if (datasetLabel.includes('정규화')) {
                                 return `${datasetLabel}: ${value ? value.toFixed(1) : 'N/A'}`;
+                            } else if (datasetLabel.includes('Bitcoin') || datasetLabel.includes('Ethereum') ||
+                                     datasetLabel.includes('Solana') || datasetLabel.includes('Ripple')) {
+                                // Show original price value in tooltip for crypto prices
+                                const date = context.label;
+                                let originalPrice = 'N/A';
+
+                                if (datasetLabel.includes('Bitcoin')) {
+                                    const item = this.btcData.find(d => d.date === date);
+                                    originalPrice = item ? `$${parseFloat(item.price).toLocaleString()}` : 'N/A';
+                                } else if (datasetLabel.includes('Ethereum')) {
+                                    const item = this.ethData.find(d => d.date === date);
+                                    originalPrice = item ? `$${parseFloat(item.price).toLocaleString()}` : 'N/A';
+                                } else if (datasetLabel.includes('Solana')) {
+                                    const item = this.solData.find(d => d.date === date);
+                                    originalPrice = item ? `$${parseFloat(item.price).toLocaleString()}` : 'N/A';
+                                } else if (datasetLabel.includes('Ripple')) {
+                                    const item = this.xrpData.find(d => d.date === date);
+                                    originalPrice = item ? `$${parseFloat(item.price).toLocaleString()}` : 'N/A';
+                                }
+
+                                return `${datasetLabel}: ${originalPrice}`;
                             }
 
                             return `${datasetLabel}: ${value}`;
