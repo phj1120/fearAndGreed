@@ -53,6 +53,11 @@ jobs:
         git commit -m "📊 Update Fear & Greed data - $(date +'%Y-%m-%d')"
         git push
 
+    - name: Trigger Pages deployment
+      if: steps.check_changes.outputs.changes == 'true'
+      run: |
+        echo "Data updated - GitHub Pages will be automatically deployed"
+
     - name: No changes detected
       if: steps.check_changes.outputs.changes == 'false'
       run: |
