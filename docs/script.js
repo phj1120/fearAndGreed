@@ -2,16 +2,13 @@
 
 class FearGreedDashboard {
     constructor() {
-        this.stockData = [];
-        this.cryptoData = [];
-        this.sp500Data = [];
-        this.nasdaqData = [];
-        this.btcData = [];
-        this.ethData = [];
-        this.solData = [];
-        this.xrpData = [];
+        this.stockCombinedData = [];
+        this.cryptoCombinedData = [];
+        this.btcPremiumData = [];
+        this.goldPremiumData = [];
         this.stockChart = null;
         this.cryptoChart = null;
+        this.premiumChart = null;
 
         this.init();
     }
@@ -30,54 +27,31 @@ class FearGreedDashboard {
     }
 
     async loadData() {
-        try {
-            // Load stock data
-            const stockResponse = await fetch('./data/stock_fear_greed.csv');
-            const stockText = await stockResponse.text();
-            this.stockData = this.parseCSV(stockText);
+        const dataFiles = [
+            { name: 'stock.csv', path: './data/stock.csv', target: 'stockCombinedData' },
+            { name: 'coin.csv', path: './data/coin.csv', target: 'cryptoCombinedData' },
+            { name: 'btc_premium.csv', path: './data/as-is/btc_premium.csv', target: 'btcPremiumData' },
+            { name: 'gold_premium.csv', path: './data/gold.csv', target: 'goldPremiumData' },
+        ];
 
-            // Load crypto data
-            const cryptoResponse = await fetch('./data/crypto_fear_greed.csv');
-            const cryptoText = await cryptoResponse.text();
-            this.cryptoData = this.parseCSV(cryptoText);
-
-            // Load S&P 500 data
-            const sp500Response = await fetch('./data/sp500_index.csv');
-            const sp500Text = await sp500Response.text();
-            this.sp500Data = this.parseCSV(sp500Text);
-
-            // Load NASDAQ data
-            const nasdaqResponse = await fetch('./data/nasdaq_index.csv');
-            const nasdaqText = await nasdaqResponse.text();
-            this.nasdaqData = this.parseCSV(nasdaqText);
-
-            // Load cryptocurrency price data
-            const btcResponse = await fetch('./data/btc_price.csv');
-            const btcText = await btcResponse.text();
-            this.btcData = this.parseCSV(btcText);
-
-            const ethResponse = await fetch('./data/eth_price.csv');
-            const ethText = await ethResponse.text();
-            this.ethData = this.parseCSV(ethText);
-
-            const solResponse = await fetch('./data/sol_price.csv');
-            const solText = await solResponse.text();
-            this.solData = this.parseCSV(solText);
-
-            const xrpResponse = await fetch('./data/xrp_price.csv');
-            const xrpText = await xrpResponse.text();
-            this.xrpData = this.parseCSV(xrpText);
-
-        } catch (error) {
-            console.error('Error loading data:', error);
-            throw error;
+        for (const file of dataFiles) {
+            try {
+                const response = await fetch(file.path);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status} for ${file.name}`);
+                }
+                const text = await response.text();
+                this[file.target] = this.parseCSV(text);
+            } catch (error) {
+                console.error(`Error loading or parsing ${file.name}:`, error);
+                throw new Error(`데이터 파일 로드 중 오류 발생: ${file.name}. 자세한 내용은 콘솔을 확인하세요.`);
+            }
         }
     }
 
     parseCSV(text) {
         const lines = text.trim().split('\n');
         const headers = lines[0].split(',');
-
         return lines.slice(1).map(line => {
             const values = line.split(',');
             const obj = {};
@@ -89,165 +63,78 @@ class FearGreedDashboard {
     }
 
     renderMetrics() {
-        // Stock Fear & Greed
-        if (this.stockData.length > 0) {
-            const latest = this.stockData[this.stockData.length - 1];
-            const value = parseInt(latest.fear_greed_value);
-
+        if (this.stockCombinedData.length > 0) {
+            const latest = this.stockCombinedData[this.stockCombinedData.length - 1];
+            const value = parseInt(latest.fear_greed);
             document.getElementById('stock-current').textContent = value;
             document.getElementById('stock-label').textContent = this.getFearGreedLabel(value);
             document.getElementById('stock-date').textContent = latest.date;
-
-            const stockCard = document.querySelector('.metric-card.stock');
-            stockCard.style.borderLeftColor = this.getFearGreedColor(value);
+            document.querySelector('.metric-card.stock').style.borderLeftColor = this.getFearGreedColor(value);
         }
 
-        // Crypto Fear & Greed
-        if (this.cryptoData.length > 0) {
-            const latest = this.cryptoData[this.cryptoData.length - 1];
-            const value = parseInt(latest.fear_greed_value);
-
+        if (this.cryptoCombinedData.length > 0) {
+            const latest = this.cryptoCombinedData[this.cryptoCombinedData.length - 1];
+            const value = parseInt(latest.crypto_fear_greed);
             document.getElementById('crypto-current').textContent = value;
             document.getElementById('crypto-label').textContent = this.getFearGreedLabel(value);
             document.getElementById('crypto-date').textContent = latest.date;
-
-            const cryptoCard = document.querySelector('.metric-card.crypto');
-            cryptoCard.style.borderLeftColor = this.getFearGreedColor(value);
+            document.querySelector('.metric-card.crypto').style.borderLeftColor = this.getFearGreedColor(value);
         }
     }
 
     renderCharts() {
         this.renderStockChart();
         this.renderCryptoChart();
+        this.renderPremiumChart();
     }
 
     renderStockChart() {
-        const ctx = document.getElementById('stockChart').getContext('2d');
-
-        if (this.stockChart) {
-            this.stockChart.destroy();
-        }
-
         const period = document.getElementById('stockPeriod').value;
         const showFearGreed = document.getElementById('showStockFearGreed').checked;
         const showSP500 = document.getElementById('showSP500').checked;
         const showNASDAQ = document.getElementById('showNASDAQ').checked;
 
-        const datasets = [];
-        let commonDates = [];
+        const series = [];
 
-        // Get filtered data based on period
-        if (showFearGreed || showSP500 || showNASDAQ) {
-            // Find common dates
-            const stockDates = new Set(this.stockData.map(d => d.date));
-            const sp500Dates = new Set(this.sp500Data.map(d => d.date));
-            const nasdaqDates = new Set(this.nasdaqData.map(d => d.date));
+        const fearGreedData = this.stockCombinedData.map(d => [new Date(d.date).getTime(), parseInt(d.fear_greed)]);
+        const sp500Data = this.stockCombinedData.map(d => [new Date(d.date).getTime(), parseFloat(d.sp500)]);
+        const nasdaqData = this.stockCombinedData.map(d => [new Date(d.date).getTime(), parseFloat(d.nasdaq)]);
 
-            commonDates = [...stockDates].filter(date => {
-                let include = true;
-                if (showSP500) include = include && sp500Dates.has(date);
-                if (showNASDAQ) include = include && nasdaqDates.has(date);
-                return include;
-            });
-
-            // Apply period filter
-            if (period !== 'all') {
-                const days = parseInt(period);
-                commonDates = commonDates.slice(-days);
-            }
-        }
-
-        // Add Fear & Greed dataset with colored segments
         if (showFearGreed) {
-            const fearGreedValues = commonDates.map(date => {
-                const item = this.stockData.find(d => d.date === date);
-                return item ? parseInt(item.fear_greed_value) : null;
+            series.push({
+                name: 'Fear & Greed 지수',
+                data: fearGreedData,
+                yAxis: 0,
+                tooltip: { valueDecimals: 0 },
+                color: '#4CAF50',
+                connectNulls: true
             });
-
-            // Create colored line segments based on Fear & Greed values
-            const fearGreedSegments = this.createColoredSegments(fearGreedValues, commonDates);
-            datasets.push(...fearGreedSegments);
         }
-
-        // Add S&P 500 dataset (normalized)
         if (showSP500) {
-            const sp500Values = commonDates.map(date => {
-                const item = this.sp500Data.find(d => d.date === date);
-                return item ? parseFloat(item.close_price) : null;
-            });
-
-            // Normalize to 0-100 scale using min-max normalization
-            const validSP500Values = sp500Values.filter(v => v !== null);
-            const sp500Min = Math.min(...validSP500Values);
-            const sp500Max = Math.max(...validSP500Values);
-            const sp500Range = sp500Max - sp500Min;
-
-            const sp500Normalized = sp500Values.map(val => {
-                if (!val) return null;
-                // Scale to 10-90 range to stay within chart bounds with some padding
-                return 10 + ((val - sp500Min) / sp500Range) * 80;
-            });
-
-            datasets.push({
-                label: 'S&P 500 (정규화)',
-                data: sp500Normalized,
-                borderColor: '#10b981',
-                backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                borderWidth: 2,
-                fill: false,
-                tension: 0.1,
-                yAxisID: 'y'
+            series.push({
+                name: 'S&P 500',
+                data: sp500Data,
+                yAxis: 1,
+                tooltip: { valueDecimals: 2 },
+                color: '#10b981',
+                connectNulls: true
             });
         }
-
-        // Add NASDAQ dataset (normalized)
         if (showNASDAQ) {
-            const nasdaqValues = commonDates.map(date => {
-                const item = this.nasdaqData.find(d => d.date === date);
-                return item ? parseFloat(item.close_price) : null;
-            });
-
-            // Normalize to 0-100 scale using min-max normalization
-            const validNasdaqValues = nasdaqValues.filter(v => v !== null);
-            const nasdaqMin = Math.min(...validNasdaqValues);
-            const nasdaqMax = Math.max(...validNasdaqValues);
-            const nasdaqRange = nasdaqMax - nasdaqMin;
-
-            const nasdaqNormalized = nasdaqValues.map(val => {
-                if (!val) return null;
-                // Scale to 10-90 range to stay within chart bounds with some padding
-                return 10 + ((val - nasdaqMin) / nasdaqRange) * 80;
-            });
-
-            datasets.push({
-                label: 'NASDAQ (정규화)',
-                data: nasdaqNormalized,
-                borderColor: '#8b5cf6',
-                backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                borderWidth: 2,
-                fill: false,
-                tension: 0.1,
-                yAxisID: 'y'
+            series.push({
+                name: 'NASDAQ',
+                data: nasdaqData,
+                yAxis: 2,
+                tooltip: { valueDecimals: 2 },
+                color: '#8b5cf6',
+                connectNulls: true
             });
         }
 
-        this.stockChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: commonDates,
-                datasets: datasets
-            },
-            options: this.getChartOptions('주식 관련 지수')
-        });
+        this.stockChart = Highcharts.stockChart('stockChart', this.getChartOptions('주식 관련 지수', series, period));
     }
 
     renderCryptoChart() {
-        const ctx = document.getElementById('cryptoChart').getContext('2d');
-
-        if (this.cryptoChart) {
-            this.cryptoChart.destroy();
-        }
-
         const period = document.getElementById('cryptoPeriod').value;
         const showFearGreed = document.getElementById('showCryptoFearGreed').checked;
         const showBTC = document.getElementById('showBTC').checked;
@@ -255,403 +142,214 @@ class FearGreedDashboard {
         const showSOL = document.getElementById('showSOL').checked;
         const showXRP = document.getElementById('showXRP').checked;
 
-        const datasets = [];
-        let commonDates = [];
+        const series = [];
 
-        // Get common dates if we're showing cryptocurrency prices
-        if (showBTC || showETH || showSOL || showXRP || showFearGreed) {
-            const cryptoDates = new Set(this.cryptoData.map(d => d.date));
-            const btcDates = new Set(this.btcData.map(d => d.date));
-            const ethDates = new Set(this.ethData.map(d => d.date));
-            const solDates = new Set(this.solData.map(d => d.date));
-            const xrpDates = new Set(this.xrpData.map(d => d.date));
+        const fearGreedData = this.cryptoCombinedData.map(d => [new Date(d.date).getTime(), parseInt(d.crypto_fear_greed)]);
+        const btcData = this.cryptoCombinedData.map(d => [new Date(d.date).getTime(), parseFloat(d.btc)]);
+        const ethData = this.cryptoCombinedData.map(d => [new Date(d.date).getTime(), parseFloat(d.eth)]);
+        const solData = this.cryptoCombinedData.map(d => [new Date(d.date).getTime(), parseFloat(d.sol)]);
+        const xrpData = this.cryptoCombinedData.map(d => [new Date(d.date).getTime(), parseFloat(d.xrp)]);
 
-            commonDates = [...cryptoDates].filter(date => {
-                let include = true;
-                if (showBTC) include = include && btcDates.has(date);
-                if (showETH) include = include && ethDates.has(date);
-                if (showSOL) include = include && solDates.has(date);
-                if (showXRP) include = include && xrpDates.has(date);
-                return include;
-            });
-
-            // Apply period filter
-            if (period !== 'all') {
-                const days = parseInt(period);
-                commonDates = commonDates.slice(-days);
-            }
-        } else {
-            // Just use crypto fear & greed dates
-            let data = this.cryptoData;
-            if (period !== 'all') {
-                const days = parseInt(period);
-                data = data.slice(-days);
-            }
-            commonDates = data.map(d => d.date);
-        }
-
-        // Add Crypto Fear & Greed dataset with colored segments
         if (showFearGreed) {
-            const fearGreedValues = commonDates.map(date => {
-                const item = this.cryptoData.find(d => d.date === date);
-                return item ? parseInt(item.fear_greed_value) : null;
+            series.push({
+                name: '암호화폐 Fear & Greed',
+                data: fearGreedData,
+                yAxis: 0,
+                tooltip: { valueDecimals: 0 },
+                color: '#FFC107',
+                connectNulls: true
             });
-
-            // Create colored line segments based on Fear & Greed values
-            const fearGreedSegments = this.createColoredSegments(fearGreedValues, commonDates, true);
-            datasets.push(...fearGreedSegments);
         }
-
-        // Add cryptocurrency price datasets (normalized)
         if (showBTC) {
-            const btcValues = commonDates.map(date => {
-                const item = this.btcData.find(d => d.date === date);
-                return item ? parseFloat(item.price) : null;
-            });
-
-            const btcNormalized = this.normalizePriceToFearGreedScale(btcValues);
-            datasets.push({
-                label: 'Bitcoin (정규화)',
-                data: btcNormalized,
-                borderColor: '#f7931a',
-                backgroundColor: 'rgba(247, 147, 26, 0.1)',
-                borderWidth: 2,
-                fill: false,
-                tension: 0.1,
-                pointRadius: 2,
-                pointHoverRadius: 4
-            });
+            series.push({ name: 'Bitcoin', data: btcData, yAxis: 1, tooltip: { valuePrefix: '$' }, color: '#f7931a', connectNulls: true });
         }
-
         if (showETH) {
-            const ethValues = commonDates.map(date => {
-                const item = this.ethData.find(d => d.date === date);
-                return item ? parseFloat(item.price) : null;
-            });
-
-            const ethNormalized = this.normalizePriceToFearGreedScale(ethValues);
-            datasets.push({
-                label: 'Ethereum (정규화)',
-                data: ethNormalized,
-                borderColor: '#627eea',
-                backgroundColor: 'rgba(98, 126, 234, 0.1)',
-                borderWidth: 2,
-                fill: false,
-                tension: 0.1,
-                pointRadius: 2,
-                pointHoverRadius: 4
-            });
+            series.push({ name: 'Ethereum', data: ethData, yAxis: 1, tooltip: { valuePrefix: '$' }, color: '#627eea', connectNulls: true });
         }
-
         if (showSOL) {
-            const solValues = commonDates.map(date => {
-                const item = this.solData.find(d => d.date === date);
-                return item ? parseFloat(item.price) : null;
-            });
-
-            const solNormalized = this.normalizePriceToFearGreedScale(solValues);
-            datasets.push({
-                label: 'Solana (정규화)',
-                data: solNormalized,
-                borderColor: '#9945ff',
-                backgroundColor: 'rgba(153, 69, 255, 0.1)',
-                borderWidth: 2,
-                fill: false,
-                tension: 0.1,
-                pointRadius: 2,
-                pointHoverRadius: 4
-            });
+            series.push({ name: 'Solana', data: solData, yAxis: 1, tooltip: { valuePrefix: '$' }, color: '#9945ff', connectNulls: true });
         }
-
         if (showXRP) {
-            const xrpValues = commonDates.map(date => {
-                const item = this.xrpData.find(d => d.date === date);
-                return item ? parseFloat(item.price) : null;
-            });
-
-            const xrpNormalized = this.normalizePriceToFearGreedScale(xrpValues);
-            datasets.push({
-                label: 'Ripple (정규화)',
-                data: xrpNormalized,
-                borderColor: '#23292f',
-                backgroundColor: 'rgba(35, 41, 47, 0.1)',
-                borderWidth: 2,
-                fill: false,
-                tension: 0.1,
-                pointRadius: 2,
-                pointHoverRadius: 4
-            });
+            series.push({ name: 'Ripple', data: xrpData, yAxis: 1, tooltip: { valuePrefix: '$' }, color: '#23292f', connectNulls: true });
         }
 
-        this.cryptoChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: commonDates,
-                datasets: datasets
-            },
-            options: this.getChartOptions('암호화폐 관련 지수')
-        });
+        this.cryptoChart = Highcharts.stockChart('cryptoChart', this.getChartOptions('암호화폐 관련 지수', series, period));
     }
 
-    createColoredSegments(values, dates, isCrypto = false) {
-        const segments = [];
+    renderPremiumChart() {
+        const period = document.getElementById('premiumPeriod').value;
+        const showBtcPremium = document.getElementById('showBtcPremium').checked;
+        const showGoldPremium = document.getElementById('showGoldPremium').checked;
 
-        // Create segments for consecutive points of the same color category
-        let currentSegment = [];
-        let currentCategory = null;
+        const series = [];
 
-        for (let i = 0; i < values.length; i++) {
-            const value = values[i];
-            if (value === null || isNaN(value)) {
-                // End current segment if we hit a null value
-                if (currentSegment.length > 0) {
-                    segments.push(this.createSegmentDataset(currentSegment, dates, currentCategory, isCrypto));
-                    currentSegment = [];
-                    currentCategory = null;
-                }
-                continue;
-            }
+        const btcPremiumData = this.btcPremiumData.map(d => [new Date(d.date).getTime(), parseFloat(d.premium_percent)]);
+        const goldPremiumData = this.goldPremiumData.map(d => [new Date(d.date).getTime(), parseFloat(d.premium_percent)]);
 
-            const category = this.getFearGreedCategory(value);
-
-            if (currentCategory !== category) {
-                // Category changed, end current segment and start new one
-                if (currentSegment.length > 0) {
-                    segments.push(this.createSegmentDataset(currentSegment, dates, currentCategory, isCrypto));
-                }
-                currentSegment = [{ index: i, value: value }];
-                currentCategory = category;
-            } else {
-                // Same category, add to current segment
-                currentSegment.push({ index: i, value: value });
-            }
+        if (showBtcPremium) {
+            series.push({
+                name: '비트코인 김치 프리미엄',
+                data: btcPremiumData,
+                yAxis: 0,
+                tooltip: { valueSuffix: ' %' },
+                color: '#f7931a',
+                connectNulls: true
+            });
+        }
+        if (showGoldPremium) {
+            series.push({
+                name: '금 프리미엄',
+                data: goldPremiumData,
+                yAxis: 0,
+                tooltip: { valueSuffix: ' %' },
+                color: '#ffd700',
+                connectNulls: true
+            });
         }
 
-        // Don't forget the last segment
-        if (currentSegment.length > 0) {
-            segments.push(this.createSegmentDataset(currentSegment, dates, currentCategory, isCrypto));
-        }
-
-        return segments;
+        this.premiumChart = Highcharts.stockChart('premiumChart', this.getPremiumChartOptions('프리미엄 지수', series, period));
     }
 
-    createSegmentDataset(segment, dates, category, isCrypto) {
-        const segmentData = new Array(dates.length).fill(null);
-
-        // Fill in the values for this segment
-        segment.forEach(point => {
-            segmentData[point.index] = point.value;
-        });
-
-        const color = this.getFearGreedColor(segment[0].value);
-        const label = isCrypto ? '암호화폐 Fear & Greed' : 'Fear & Greed 지수';
-        const interpretation = this.getFearGreedLabel(segment[0].value);
+    getPremiumChartOptions(title, series, period) {
+        let range = {};
+        if (period !== 'all') {
+            const days = parseInt(period);
+            range = {
+                xAxis: {
+                    min: new Date().setDate(new Date().getDate() - days),
+                    max: new Date().getTime()
+                }
+            };
+        }
 
         return {
-            label: `${label} (${interpretation})`,
-            data: segmentData,
-            borderColor: color,
-            backgroundColor: isCrypto ? this.hexToRgba(color, 0.1) : 'transparent',
-            borderWidth: 3,
-            fill: isCrypto,
-            tension: 0.1,
-            pointRadius: 2,
-            pointHoverRadius: 6,
-            pointBackgroundColor: color,
-            pointBorderColor: color,
-            spanGaps: false
+            chart: {
+                zoomType: 'x'
+            },
+            title: {
+                text: title
+            },
+            xAxis: {
+                type: 'datetime'
+            },
+            yAxis: [{
+                labels: {
+                    format: '{value}% ',
+                    style: {
+                        color: Highcharts.getOptions().colors[1]
+                    }
+                },
+                title: {
+                    text: 'Premium (%)',
+                    style: {
+                        color: Highcharts.getOptions().colors[1]
+                    }
+                }
+            }],
+            tooltip: {
+                shared: true,
+                pointFormat: '<span style="color:{series.color}">{series.name}</span>: <b>{point.y:.2f}%</b><br/>'
+            },
+            legend: {
+                enabled: true
+            },
+            series: series,
+            ...range
         };
     }
 
-    getFearGreedCategory(value) {
-        if (value <= 24) return 'extreme-fear';
-        if (value <= 44) return 'fear';
-        if (value <= 55) return 'neutral';
-        if (value <= 75) return 'greed';
-        return 'extreme-greed';
-    }
+    getChartOptions(title, series, period) {
+        let range = {};
+        if (period !== 'all') {
+            const days = parseInt(period);
+            range = {
+                rangeSelector: {
+                    selected: 0 // will be overridden by button click
+                },
+                xAxis: {
+                    min: new Date().setDate(new Date().getDate() - days),
+                    max: new Date().getTime()
+                }
+            };
+        }
 
-    hexToRgba(hex, alpha) {
-        const r = parseInt(hex.slice(1, 3), 16);
-        const g = parseInt(hex.slice(3, 5), 16);
-        const b = parseInt(hex.slice(5, 7), 16);
-        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    }
 
-    normalizePriceToFearGreedScale(values) {
-        const validValues = values.filter(v => v !== null && !isNaN(v));
-        if (validValues.length === 0) return values;
-
-        const min = Math.min(...validValues);
-        const max = Math.max(...validValues);
-        const range = max - min;
-
-        return values.map(val => {
-            if (val === null || isNaN(val)) return null;
-            // Scale to 10-90 range to stay within chart bounds with some padding
-            return 10 + ((val - min) / range) * 80;
-        });
+        return {
+            chart: {
+                zoomType: 'x'
+            },
+            title: {
+                text: title
+            },
+            xAxis: {
+                type: 'datetime'
+            },
+            yAxis: [{
+                labels: {
+                    format: '{value}',
+                    style: {
+                        color: '#4CAF50'
+                    }
+                },
+                title: {
+                    text: 'Fear & Greed',
+                    style: {
+                        color: '#4CAF50'
+                    }
+                },
+                opposite: false,
+                min: 0,
+                max: 100
+            }, {
+                title: {
+                    text: null
+                },
+                labels: {
+                    format: '{value:,.0f}',
+                    style: {
+                        color: '#10b981'
+                    }
+                },
+                opposite: true
+            }, {
+                title: {
+                    text: null
+                },
+                labels: {
+                    format: '{value:,.0f}',
+                    style: {
+                        color: '#8b5cf6'
+                    }
+                },
+                opposite: true
+            }],
+            tooltip: {
+                shared: true
+            },
+            legend: {
+                enabled: true
+            },
+            series: series,
+            ...range
+        };
     }
 
     setupEventListeners() {
-        // Period selectors
-        document.getElementById('stockPeriod').addEventListener('change', () => {
-            this.renderStockChart();
-        });
+        document.getElementById('stockPeriod').addEventListener('change', () => this.renderStockChart());
+        document.getElementById('cryptoPeriod').addEventListener('change', () => this.renderCryptoChart());
+        document.getElementById('showStockFearGreed').addEventListener('change', () => this.renderStockChart());
+        document.getElementById('showSP500').addEventListener('change', () => this.renderStockChart());
+        document.getElementById('showNASDAQ').addEventListener('change', () => this.renderStockChart());
+        document.getElementById('showCryptoFearGreed').addEventListener('change', () => this.renderCryptoChart());
+        document.getElementById('showBTC').addEventListener('change', () => this.renderCryptoChart());
+        document.getElementById('showETH').addEventListener('change', () => this.renderCryptoChart());
+        document.getElementById('showSOL').addEventListener('change', () => this.renderCryptoChart());
+        document.getElementById('showXRP').addEventListener('change', () => this.renderCryptoChart());
 
-        document.getElementById('cryptoPeriod').addEventListener('change', () => {
-            this.renderCryptoChart();
-        });
-
-        // Toggle switches
-        document.getElementById('showStockFearGreed').addEventListener('change', () => {
-            this.renderStockChart();
-        });
-
-        document.getElementById('showSP500').addEventListener('change', () => {
-            this.renderStockChart();
-        });
-
-        document.getElementById('showNASDAQ').addEventListener('change', () => {
-            this.renderStockChart();
-        });
-
-        document.getElementById('showCryptoFearGreed').addEventListener('change', () => {
-            this.renderCryptoChart();
-        });
-
-        document.getElementById('showBTC').addEventListener('change', () => {
-            this.renderCryptoChart();
-        });
-
-        document.getElementById('showETH').addEventListener('change', () => {
-            this.renderCryptoChart();
-        });
-
-        document.getElementById('showSOL').addEventListener('change', () => {
-            this.renderCryptoChart();
-        });
-
-        document.getElementById('showXRP').addEventListener('change', () => {
-            this.renderCryptoChart();
-        });
-    }
-
-    getChartOptions(title) {
-        return {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                title: {
-                    display: false
-                },
-                legend: {
-                    display: true,
-                    position: 'top'
-                },
-                tooltip: {
-                    callbacks: {
-                        title: (context) => {
-                            // Show formatted date
-                            const date = context[0].label;
-                            return new Date(date).toLocaleDateString('ko-KR', {
-                                year: 'numeric',
-                                month: 'long',
-                                day: 'numeric',
-                                weekday: 'short'
-                            });
-                        },
-                        label: (context) => {
-                            const value = context.parsed.y;
-                            const datasetLabel = context.dataset.label;
-
-                            if (datasetLabel.includes('Fear & Greed')) {
-                                if (value !== null && !isNaN(value)) {
-                                    return [
-                                        `${datasetLabel}: ${value}`,
-                                        `해석: ${this.getFearGreedLabel(value)}`
-                                    ];
-                                }
-                            } else if (datasetLabel.includes('정규화')) {
-                                return `${datasetLabel}: ${value ? value.toFixed(1) : 'N/A'}`;
-                            } else if (datasetLabel.includes('Bitcoin') || datasetLabel.includes('Ethereum') ||
-                                     datasetLabel.includes('Solana') || datasetLabel.includes('Ripple')) {
-                                // Show original price value in tooltip for crypto prices
-                                const date = context.label;
-                                let originalPrice = 'N/A';
-
-                                if (datasetLabel.includes('Bitcoin')) {
-                                    const item = this.btcData.find(d => d.date === date);
-                                    originalPrice = item ? `$${parseFloat(item.price).toLocaleString()}` : 'N/A';
-                                } else if (datasetLabel.includes('Ethereum')) {
-                                    const item = this.ethData.find(d => d.date === date);
-                                    originalPrice = item ? `$${parseFloat(item.price).toLocaleString()}` : 'N/A';
-                                } else if (datasetLabel.includes('Solana')) {
-                                    const item = this.solData.find(d => d.date === date);
-                                    originalPrice = item ? `$${parseFloat(item.price).toLocaleString()}` : 'N/A';
-                                } else if (datasetLabel.includes('Ripple')) {
-                                    const item = this.xrpData.find(d => d.date === date);
-                                    originalPrice = item ? `$${parseFloat(item.price).toLocaleString()}` : 'N/A';
-                                }
-
-                                return `${datasetLabel}: ${originalPrice}`;
-                            }
-
-                            return `${datasetLabel}: ${value}`;
-                        },
-                        labelColor: (context) => {
-                            return {
-                                borderColor: context.dataset.borderColor,
-                                backgroundColor: context.dataset.borderColor
-                            };
-                        }
-                    },
-                    displayColors: true,
-                    titleFont: {
-                        size: 14,
-                        weight: 'bold'
-                    },
-                    bodyFont: {
-                        size: 13
-                    },
-                    padding: 12,
-                    cornerRadius: 8
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 100,
-                    grid: {
-                        color: 'rgba(0, 0, 0, 0.1)'
-                    },
-                    ticks: {
-                        callback: function(value) {
-                            return value;
-                        }
-                    },
-                    title: {
-                        display: true,
-                        text: '지수 값'
-                    }
-                },
-                x: {
-                    grid: {
-                        display: false
-                    },
-                    ticks: {
-                        maxTicksLimit: 8,
-                        callback: function(value, index, values) {
-                            const date = this.getLabelForValue(value);
-                            return new Date(date).toLocaleDateString('ko-KR', {
-                                month: 'short',
-                                day: 'numeric'
-                            });
-                        }
-                    }
-                }
-            }
-        };
+        // Premium chart listeners
+        document.getElementById('premiumPeriod').addEventListener('change', () => this.renderPremiumChart());
+        document.getElementById('showBtcPremium').addEventListener('change', () => this.renderPremiumChart());
+        document.getElementById('showGoldPremium').addEventListener('change', () => this.renderPremiumChart());
     }
 
     getFearGreedLabel(value) {
@@ -681,7 +379,6 @@ class FearGreedDashboard {
     }
 }
 
-// Initialize dashboard when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     new FearGreedDashboard();
 });

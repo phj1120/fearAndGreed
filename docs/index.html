@@ -5,8 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fear & Greed Index Dashboard</title>
     <link rel="stylesheet" href="style.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
+    <!-- Highcharts Highstock CDN -->
+    <script src="https://code.highcharts.com/stock/highstock.js"></script>
+    <script src="https://code.highcharts.com/stock/modules/data.js"></script>
+    <script src="https://code.highcharts.com/stock/modules/exporting.js"></script>
+    <script src="https://code.highcharts.com/stock/modules/export-data.js"></script>
 </head>
 <body>
     <div class="container">
@@ -71,7 +74,7 @@
                         </div>
                     </div>
                     <div class="chart-wrapper">
-                        <canvas id="stockChart"></canvas>
+                        <div id="stockChart" class="highcharts-chart"></div>
                     </div>
                 </div>
 
@@ -121,7 +124,42 @@
                         </div>
                     </div>
                     <div class="chart-wrapper">
-                        <canvas id="cryptoChart"></canvas>
+                        <div id="cryptoChart" class="highcharts-chart"></div>
+                    </div>
+                </div>
+
+                <!-- 프리미엄 지수 차트 -->
+                <div class="chart-section">
+                    <div class="chart-header">
+                        <h3>💰 프리미엄 지수</h3>
+                        <div class="chart-controls">
+                            <div class="period-controls">
+                                <label>기간:</label>
+                                <select id="premiumPeriod">
+                                    <option value="30">최근 30일</option>
+                                    <option value="90" selected>최근 90일</option>
+                                    <option value="180">최근 180일</option>
+                                    <option value="365">최근 1년</option>
+                                    <option value="all">전체</option>
+                                </select>
+                            </div>
+                            <div class="data-toggles">
+                                <label>표시할 데이터:</label>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="showBtcPremium" checked>
+                                    <span class="slider"></span>
+                                    비트코인 김치 프리미엄
+                                </label>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="showGoldPremium" checked>
+                                    <span class="slider"></span>
+                                    금 프리미엄
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chart-wrapper">
+                        <div id="premiumChart" class="highcharts-chart"></div>
                     </div>
                 </div>
             </div>
