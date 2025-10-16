@@ -189,7 +189,7 @@ class DataCollector:
     def _collect_historical_gold_premium(self):
         print("Collecting historical Gold premium...")
         # 1. Fetch all historical data sources
-        start_date = "2011-01-01"
+        start_date = "2000-01-01"
         end_date = datetime.now().strftime('%Y-%m-%d')
         
         print("Fetching historical international gold prices (yfinance)...")
