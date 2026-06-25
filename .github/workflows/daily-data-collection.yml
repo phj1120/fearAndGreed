@@ -31,9 +31,10 @@ jobs:
       run: |
         python data_collector.py --daily
 
-    - name: Copy CSV files to docs folder
+    - name: Copy data files to docs folder
       run: |
         cp data/*.csv docs/data/
+        # gold.csv is written directly to docs/data/ by Python — already in place
 
     - name: Check for changes
       id: check_changes
@@ -52,11 +53,6 @@ jobs:
         git add data/*.csv docs/data/*.csv
         git commit -m "📊 Update Fear & Greed data - $(date +'%Y-%m-%d')"
         git push
-
-    - name: Trigger Pages deployment
-      if: steps.check_changes.outputs.changes == 'true'
-      run: |
-        echo "Data updated - GitHub Pages will be automatically deployed"
 
     - name: No changes detected
       if: steps.check_changes.outputs.changes == 'false'

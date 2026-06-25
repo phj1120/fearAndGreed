@@ -279,6 +279,15 @@ footer p {
     margin: 1rem 0;
 }
 
+.chart-error {
+    color: #92400e;
+    text-align: center;
+    padding: 3rem 2rem;
+    background: #fef3c7;
+    border-radius: 8px;
+    font-size: 0.9rem;
+}
+
 /* Utility Classes */
 .text-center {
     text-align: center;
