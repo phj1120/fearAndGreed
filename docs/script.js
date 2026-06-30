@@ -4,6 +4,7 @@ class FearGreedDashboard {
     constructor() {
         this.stockCombinedData = [];
         this.cryptoCombinedData = [];
+        this.vixData = [];
         this.btcPremiumData = [];
         this.goldPremiumData = [];
         this.stockChart = null;
@@ -14,71 +15,90 @@ class FearGreedDashboard {
     }
 
     async init() {
-        try {
-            await this.loadData();
-            this.renderMetrics();
-            this.renderCharts();
-            this.setupEventListeners();
-            this.updateLastUpdateTime();
-        } catch (error) {
-            console.error('Error initializing dashboard:', error);
-            this.showError('데이터를 불러오는 중 오류가 발생했습니다.');
-        }
+        this.showLoadingState();
+        await this.loadData();
+        this.renderMetrics();
+        this.renderCharts();
+        this.setupEventListeners();
+        this.updateLastUpdateTime();
+    }
+
+    showLoadingState() {
+        document.getElementById('stock-current').textContent = '...';
+        document.getElementById('crypto-current').textContent = '...';
+        document.getElementById('stock-label').textContent = '데이터 로딩 중';
+        document.getElementById('crypto-label').textContent = '데이터 로딩 중';
     }
 
     async loadData() {
         const dataFiles = [
-            { name: 'stock.csv', path: './data/stock.csv', target: 'stockCombinedData' },
-            { name: 'coin.csv', path: './data/coin.csv', target: 'cryptoCombinedData' },
-            { name: 'btc_premium.csv', path: './data/as-is/btc_premium.csv', target: 'btcPremiumData' },
-            { name: 'gold_premium.csv', path: './data/gold.csv', target: 'goldPremiumData' },
+            { name: 'stock.csv',     path: './data/stock.csv',     target: 'stockCombinedData' },
+            { name: 'coin.csv',      path: './data/coin.csv',      target: 'cryptoCombinedData' },
+            { name: 'vix_index.csv', path: './data/vix_index.csv', target: 'vixData' },
+            { name: 'btc_premium.csv', path: './data/btc_premium.csv', target: 'btcPremiumData' },
+            { name: 'gold.csv',      path: './data/gold.csv',      target: 'goldPremiumData' },
         ];
 
-        for (const file of dataFiles) {
-            try {
+        const results = await Promise.allSettled(
+            dataFiles.map(async (file) => {
                 const response = await fetch(file.path);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status} for ${file.name}`);
-                }
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const text = await response.text();
-                this[file.target] = this.parseCSV(text);
-            } catch (error) {
-                console.error(`Error loading or parsing ${file.name}:`, error);
-                throw new Error(`데이터 파일 로드 중 오류 발생: ${file.name}. 자세한 내용은 콘솔을 확인하세요.`);
+                const parsed = this.parseCSV(text);
+                if (parsed.length === 0) throw new Error('empty file');
+                this[file.target] = parsed;
+                console.log(`Loaded ${file.name}: ${parsed.length} rows`);
+            })
+        );
+
+        results.forEach((result, i) => {
+            if (result.status === 'rejected') {
+                console.warn(`Failed to load ${dataFiles[i].name}:`, result.reason.message);
             }
-        }
+        });
     }
 
     parseCSV(text) {
         const lines = text.trim().split('\n');
-        const headers = lines[0].split(',');
+        if (lines.length < 2) return [];
+        const headers = lines[0].split(',').map(h => h.trim());
         return lines.slice(1).map(line => {
             const values = line.split(',');
             const obj = {};
             headers.forEach((header, index) => {
-                obj[header.trim()] = values[index]?.trim();
+                obj[header] = values[index] !== undefined ? values[index].trim() : '';
             });
             return obj;
-        }).filter(row => row.date); // Filter out empty rows
+        }).filter(row => row.date);
     }
 
     renderMetrics() {
         if (this.stockCombinedData.length > 0) {
-            const latest = this.stockCombinedData[this.stockCombinedData.length - 1];
-            const value = parseInt(latest.fear_greed);
-            document.getElementById('stock-current').textContent = value;
-            document.getElementById('stock-label').textContent = this.getFearGreedLabel(value);
-            document.getElementById('stock-date').textContent = latest.date;
-            document.querySelector('.metric-card.stock').style.borderLeftColor = this.getFearGreedColor(value);
+            const stockWithValue = [...this.stockCombinedData].reverse().find(d => d.fear_greed && !isNaN(parseInt(d.fear_greed)));
+            if (stockWithValue) {
+                const value = parseInt(stockWithValue.fear_greed);
+                document.getElementById('stock-current').textContent = value;
+                document.getElementById('stock-label').textContent = this.getFearGreedLabel(value);
+                document.getElementById('stock-date').textContent = stockWithValue.date;
+                document.querySelector('.metric-card.stock').style.borderLeftColor = this.getFearGreedColor(value);
+            }
+        } else {
+            document.getElementById('stock-current').textContent = '-';
+            document.getElementById('stock-label').textContent = '데이터 없음';
         }
 
         if (this.cryptoCombinedData.length > 0) {
-            const latest = this.cryptoCombinedData[this.cryptoCombinedData.length - 1];
-            const value = parseInt(latest.crypto_fear_greed);
-            document.getElementById('crypto-current').textContent = value;
-            document.getElementById('crypto-label').textContent = this.getFearGreedLabel(value);
-            document.getElementById('crypto-date').textContent = latest.date;
-            document.querySelector('.metric-card.crypto').style.borderLeftColor = this.getFearGreedColor(value);
+            const cryptoWithValue = [...this.cryptoCombinedData].reverse().find(d => d.crypto_fear_greed && !isNaN(parseInt(d.crypto_fear_greed)));
+            if (cryptoWithValue) {
+                const value = parseInt(cryptoWithValue.crypto_fear_greed);
+                document.getElementById('crypto-current').textContent = value;
+                document.getElementById('crypto-label').textContent = this.getFearGreedLabel(value);
+                document.getElementById('crypto-date').textContent = cryptoWithValue.date;
+                document.querySelector('.metric-card.crypto').style.borderLeftColor = this.getFearGreedColor(value);
+            }
+        } else {
+            document.getElementById('crypto-current').textContent = '-';
+            document.getElementById('crypto-label').textContent = '데이터 없음';
         }
     }
 
@@ -88,269 +108,305 @@ class FearGreedDashboard {
         this.renderPremiumChart();
     }
 
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    toTimeSeries(data, dateKey, valueKey) {
+        return data
+            .map(d => [new Date(d[dateKey]).getTime(), parseFloat(d[valueKey])])
+            .filter(([, v]) => !isNaN(v));
+    }
+
+    getDateRange(period) {
+        if (period === 'all') return {};
+        const days = parseInt(period);
+        return {
+            xAxis: {
+                min: Date.now() - days * 86400000,
+                max: Date.now(),
+            },
+        };
+    }
+
+    showChartError(containerId, message) {
+        const el = document.getElementById(containerId);
+        if (el) {
+            el.innerHTML = `<div class="chart-error">${message}</div>`;
+        }
+    }
+
+    // ── Stock Chart ───────────────────────────────────────────────────────────
+
     renderStockChart() {
-        const period = document.getElementById('stockPeriod').value;
-        const showFearGreed = document.getElementById('showStockFearGreed').checked;
-        const showSP500 = document.getElementById('showSP500').checked;
-        const showNASDAQ = document.getElementById('showNASDAQ').checked;
+        const period      = document.getElementById('stockPeriod').value;
+        const showFG      = document.getElementById('showStockFearGreed').checked;
+        const showSP500   = document.getElementById('showSP500').checked;
+        const showNASDAQ  = document.getElementById('showNASDAQ').checked;
+        const showVIX     = document.getElementById('showVIX').checked;
+
+        if (this.stockCombinedData.length === 0 && this.vixData.length === 0) {
+            this.showChartError('stockChart', '주식 데이터를 불러올 수 없습니다.');
+            return;
+        }
 
         const series = [];
 
-        const fearGreedData = this.stockCombinedData.map(d => [new Date(d.date).getTime(), parseInt(d.fear_greed)]);
-        const sp500Data = this.stockCombinedData.map(d => [new Date(d.date).getTime(), parseFloat(d.sp500)]);
-        const nasdaqData = this.stockCombinedData.map(d => [new Date(d.date).getTime(), parseFloat(d.nasdaq)]);
-
-        if (showFearGreed) {
+        if (showFG && this.stockCombinedData.length > 0) {
             series.push({
                 name: 'Fear & Greed 지수',
-                data: fearGreedData,
+                data: this.toTimeSeries(this.stockCombinedData, 'date', 'fear_greed'),
                 yAxis: 0,
                 tooltip: { valueDecimals: 0 },
                 color: '#4CAF50',
-                connectNulls: true
+                connectNulls: false,
             });
         }
-        if (showSP500) {
+        if (showSP500 && this.stockCombinedData.length > 0) {
             series.push({
                 name: 'S&P 500',
-                data: sp500Data,
+                data: this.toTimeSeries(this.stockCombinedData, 'date', 'sp500'),
                 yAxis: 1,
                 tooltip: { valueDecimals: 2 },
                 color: '#10b981',
-                connectNulls: true
+                connectNulls: false,
             });
         }
-        if (showNASDAQ) {
+        if (showNASDAQ && this.stockCombinedData.length > 0) {
             series.push({
                 name: 'NASDAQ',
-                data: nasdaqData,
+                data: this.toTimeSeries(this.stockCombinedData, 'date', 'nasdaq'),
                 yAxis: 2,
                 tooltip: { valueDecimals: 2 },
                 color: '#8b5cf6',
-                connectNulls: true
+                connectNulls: false,
+            });
+        }
+        if (showVIX && this.vixData.length > 0) {
+            series.push({
+                name: 'VIX (공포지수)',
+                data: this.toTimeSeries(this.vixData, 'date', 'close_price'),
+                yAxis: 3,
+                tooltip: { valueDecimals: 2 },
+                color: '#ef4444',
+                connectNulls: false,
             });
         }
 
-        this.stockChart = Highcharts.stockChart('stockChart', this.getChartOptions('주식 관련 지수', series, period));
+        if (this.stockChart) this.stockChart.destroy();
+        this.stockChart = Highcharts.stockChart('stockChart', {
+            ...this.getBaseChartOptions('주식 관련 지수', period),
+            yAxis: [
+                {
+                    labels: { format: '{value}', style: { color: '#4CAF50' } },
+                    title: { text: 'Fear & Greed', style: { color: '#4CAF50' } },
+                    opposite: false,
+                    min: 0, max: 100,
+                },
+                {
+                    title: { text: null },
+                    labels: { format: '{value:,.0f}', style: { color: '#10b981' } },
+                    opposite: true,
+                },
+                {
+                    title: { text: null },
+                    labels: { format: '{value:,.0f}', style: { color: '#8b5cf6' } },
+                    opposite: true,
+                    linkedTo: 1,
+                    visible: false,
+                },
+                {
+                    title: { text: 'VIX', style: { color: '#ef4444' } },
+                    labels: { format: '{value:.0f}', style: { color: '#ef4444' } },
+                    opposite: true,
+                    min: 0,
+                },
+            ],
+            series,
+        });
     }
 
+    // ── Crypto Chart ──────────────────────────────────────────────────────────
+
     renderCryptoChart() {
-        const period = document.getElementById('cryptoPeriod').value;
-        const showFearGreed = document.getElementById('showCryptoFearGreed').checked;
+        const period  = document.getElementById('cryptoPeriod').value;
+        const showFG  = document.getElementById('showCryptoFearGreed').checked;
         const showBTC = document.getElementById('showBTC').checked;
         const showETH = document.getElementById('showETH').checked;
         const showSOL = document.getElementById('showSOL').checked;
         const showXRP = document.getElementById('showXRP').checked;
 
+        if (this.cryptoCombinedData.length === 0) {
+            this.showChartError('cryptoChart', '암호화폐 데이터를 불러올 수 없습니다.');
+            return;
+        }
+
         const series = [];
 
-        const fearGreedData = this.cryptoCombinedData.map(d => [new Date(d.date).getTime(), parseInt(d.crypto_fear_greed)]);
-        const btcData = this.cryptoCombinedData.map(d => [new Date(d.date).getTime(), parseFloat(d.btc)]);
-        const ethData = this.cryptoCombinedData.map(d => [new Date(d.date).getTime(), parseFloat(d.eth)]);
-        const solData = this.cryptoCombinedData.map(d => [new Date(d.date).getTime(), parseFloat(d.sol)]);
-        const xrpData = this.cryptoCombinedData.map(d => [new Date(d.date).getTime(), parseFloat(d.xrp)]);
-
-        if (showFearGreed) {
+        if (showFG) {
             series.push({
                 name: '암호화폐 Fear & Greed',
-                data: fearGreedData,
+                data: this.toTimeSeries(this.cryptoCombinedData, 'date', 'crypto_fear_greed'),
                 yAxis: 0,
                 tooltip: { valueDecimals: 0 },
                 color: '#FFC107',
-                connectNulls: true
+                connectNulls: false,
             });
         }
         if (showBTC) {
-            series.push({ name: 'Bitcoin', data: btcData, yAxis: 1, tooltip: { valuePrefix: '$' }, color: '#f7931a', connectNulls: true });
+            series.push({
+                name: 'Bitcoin',
+                data: this.toTimeSeries(this.cryptoCombinedData, 'date', 'bitcoin'),
+                yAxis: 1,
+                tooltip: { valuePrefix: '$', valueDecimals: 2 },
+                color: '#f7931a',
+                connectNulls: false,
+            });
         }
         if (showETH) {
-            series.push({ name: 'Ethereum', data: ethData, yAxis: 1, tooltip: { valuePrefix: '$' }, color: '#627eea', connectNulls: true });
+            series.push({
+                name: 'Ethereum',
+                data: this.toTimeSeries(this.cryptoCombinedData, 'date', 'ethereum'),
+                yAxis: 1,
+                tooltip: { valuePrefix: '$', valueDecimals: 2 },
+                color: '#627eea',
+                connectNulls: false,
+            });
         }
         if (showSOL) {
-            series.push({ name: 'Solana', data: solData, yAxis: 1, tooltip: { valuePrefix: '$' }, color: '#9945ff', connectNulls: true });
+            series.push({
+                name: 'Solana',
+                data: this.toTimeSeries(this.cryptoCombinedData, 'date', 'solana'),
+                yAxis: 1,
+                tooltip: { valuePrefix: '$', valueDecimals: 2 },
+                color: '#9945ff',
+                connectNulls: false,
+            });
         }
         if (showXRP) {
-            series.push({ name: 'Ripple', data: xrpData, yAxis: 1, tooltip: { valuePrefix: '$' }, color: '#23292f', connectNulls: true });
+            series.push({
+                name: 'Ripple',
+                data: this.toTimeSeries(this.cryptoCombinedData, 'date', 'ripple'),
+                yAxis: 1,
+                tooltip: { valuePrefix: '$', valueDecimals: 4 },
+                color: '#23292f',
+                connectNulls: false,
+            });
         }
 
-        this.cryptoChart = Highcharts.stockChart('cryptoChart', this.getChartOptions('암호화폐 관련 지수', series, period));
+        if (this.cryptoChart) this.cryptoChart.destroy();
+        this.cryptoChart = Highcharts.stockChart('cryptoChart', {
+            ...this.getBaseChartOptions('암호화폐 관련 지수', period),
+            yAxis: [
+                {
+                    labels: { format: '{value}', style: { color: '#FFC107' } },
+                    title: { text: 'Fear & Greed', style: { color: '#FFC107' } },
+                    opposite: false,
+                    min: 0, max: 100,
+                },
+                {
+                    title: { text: 'Price (USD)' },
+                    labels: { format: '${value:,.0f}', style: { color: '#f7931a' } },
+                    opposite: true,
+                },
+            ],
+            series,
+        });
     }
 
+    // ── Premium Chart ─────────────────────────────────────────────────────────
+
     renderPremiumChart() {
-        const period = document.getElementById('premiumPeriod').value;
+        const period         = document.getElementById('premiumPeriod').value;
         const showBtcPremium = document.getElementById('showBtcPremium').checked;
         const showGoldPremium = document.getElementById('showGoldPremium').checked;
 
+        if (this.btcPremiumData.length === 0 && this.goldPremiumData.length === 0) {
+            this.showChartError('premiumChart', '프리미엄 데이터를 불러올 수 없습니다.');
+            return;
+        }
+
         const series = [];
 
-        const btcPremiumData = this.btcPremiumData.map(d => [new Date(d.date).getTime(), parseFloat(d.premium_percent)]);
-        const goldPremiumData = this.goldPremiumData.map(d => [new Date(d.date).getTime(), parseFloat(d.premium_percent)]);
-
-        if (showBtcPremium) {
+        if (showBtcPremium && this.btcPremiumData.length > 0) {
             series.push({
                 name: '비트코인 김치 프리미엄',
-                data: btcPremiumData,
+                data: this.toTimeSeries(this.btcPremiumData, 'date', 'premium_percent'),
                 yAxis: 0,
-                tooltip: { valueSuffix: ' %' },
+                tooltip: { valueSuffix: ' %', valueDecimals: 2 },
                 color: '#f7931a',
-                connectNulls: true
+                connectNulls: false,
             });
         }
-        if (showGoldPremium) {
+        if (showGoldPremium && this.goldPremiumData.length > 0) {
             series.push({
                 name: '금 프리미엄',
-                data: goldPremiumData,
+                data: this.toTimeSeries(this.goldPremiumData, 'date', 'premium_percent'),
                 yAxis: 0,
-                tooltip: { valueSuffix: ' %' },
+                tooltip: { valueSuffix: ' %', valueDecimals: 2 },
                 color: '#ffd700',
-                connectNulls: true
+                connectNulls: false,
             });
         }
 
-        this.premiumChart = Highcharts.stockChart('premiumChart', this.getPremiumChartOptions('프리미엄 지수', series, period));
-    }
-
-    getPremiumChartOptions(title, series, period) {
-        let range = {};
-        if (period !== 'all') {
-            const days = parseInt(period);
-            range = {
-                xAxis: {
-                    min: new Date().setDate(new Date().getDate() - days),
-                    max: new Date().getTime()
-                }
-            };
-        }
-
-        return {
-            chart: {
-                zoomType: 'x'
-            },
-            title: {
-                text: title
-            },
-            xAxis: {
-                type: 'datetime'
-            },
+        if (this.premiumChart) this.premiumChart.destroy();
+        this.premiumChart = Highcharts.stockChart('premiumChart', {
+            ...this.getBaseChartOptions('프리미엄 지수', period),
             yAxis: [{
-                labels: {
-                    format: '{value}% ',
-                    style: {
-                        color: Highcharts.getOptions().colors[1]
-                    }
-                },
-                title: {
-                    text: 'Premium (%)',
-                    style: {
-                        color: Highcharts.getOptions().colors[1]
-                    }
-                }
+                labels: { format: '{value}%', style: { color: '#f7931a' } },
+                title: { text: 'Premium (%)' },
+                plotLines: [{
+                    value: 0,
+                    color: '#999',
+                    dashStyle: 'Dash',
+                    width: 1,
+                }],
             }],
             tooltip: {
                 shared: true,
-                pointFormat: '<span style="color:{series.color}">{series.name}</span>: <b>{point.y:.2f}%</b><br/>'
+                pointFormat: '<span style="color:{series.color}">{series.name}</span>: <b>{point.y:.2f}%</b><br/>',
             },
-            legend: {
-                enabled: true
-            },
-            series: series,
-            ...range
-        };
+            series,
+        });
     }
 
-    getChartOptions(title, series, period) {
-        let range = {};
-        if (period !== 'all') {
-            const days = parseInt(period);
-            range = {
-                rangeSelector: {
-                    selected: 0 // will be overridden by button click
-                },
-                xAxis: {
-                    min: new Date().setDate(new Date().getDate() - days),
-                    max: new Date().getTime()
-                }
-            };
-        }
+    // ── Chart Base Options ────────────────────────────────────────────────────
 
-
+    getBaseChartOptions(title, period) {
+        const range = this.getDateRange(period);
         return {
-            chart: {
-                zoomType: 'x'
-            },
-            title: {
-                text: title
-            },
-            xAxis: {
-                type: 'datetime'
-            },
-            yAxis: [{
-                labels: {
-                    format: '{value}',
-                    style: {
-                        color: '#4CAF50'
-                    }
-                },
-                title: {
-                    text: 'Fear & Greed',
-                    style: {
-                        color: '#4CAF50'
-                    }
-                },
-                opposite: false,
-                min: 0,
-                max: 100
-            }, {
-                title: {
-                    text: null
-                },
-                labels: {
-                    format: '{value:,.0f}',
-                    style: {
-                        color: '#10b981'
-                    }
-                },
-                opposite: true
-            }, {
-                title: {
-                    text: null
-                },
-                labels: {
-                    format: '{value:,.0f}',
-                    style: {
-                        color: '#8b5cf6'
-                    }
-                },
-                opposite: true
-            }],
-            tooltip: {
-                shared: true
-            },
-            legend: {
-                enabled: true
-            },
-            series: series,
-            ...range
+            chart: { zoomType: 'x' },
+            title: { text: title },
+            xAxis: { type: 'datetime', ...(range.xAxis || {}) },
+            tooltip: { shared: true },
+            legend: { enabled: true },
+            rangeSelector: { enabled: false },
+            navigator: { enabled: true },
+            scrollbar: { enabled: false },
         };
     }
+
+    // ── Event Listeners ───────────────────────────────────────────────────────
 
     setupEventListeners() {
-        document.getElementById('stockPeriod').addEventListener('change', () => this.renderStockChart());
-        document.getElementById('cryptoPeriod').addEventListener('change', () => this.renderCryptoChart());
-        document.getElementById('showStockFearGreed').addEventListener('change', () => this.renderStockChart());
-        document.getElementById('showSP500').addEventListener('change', () => this.renderStockChart());
-        document.getElementById('showNASDAQ').addEventListener('change', () => this.renderStockChart());
-        document.getElementById('showCryptoFearGreed').addEventListener('change', () => this.renderCryptoChart());
-        document.getElementById('showBTC').addEventListener('change', () => this.renderCryptoChart());
-        document.getElementById('showETH').addEventListener('change', () => this.renderCryptoChart());
-        document.getElementById('showSOL').addEventListener('change', () => this.renderCryptoChart());
-        document.getElementById('showXRP').addEventListener('change', () => this.renderCryptoChart());
+        const stockControls = ['stockPeriod', 'showStockFearGreed', 'showSP500', 'showNASDAQ', 'showVIX'];
+        stockControls.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('change', () => this.renderStockChart());
+        });
 
-        // Premium chart listeners
-        document.getElementById('premiumPeriod').addEventListener('change', () => this.renderPremiumChart());
-        document.getElementById('showBtcPremium').addEventListener('change', () => this.renderPremiumChart());
-        document.getElementById('showGoldPremium').addEventListener('change', () => this.renderPremiumChart());
+        const cryptoControls = ['cryptoPeriod', 'showCryptoFearGreed', 'showBTC', 'showETH', 'showSOL', 'showXRP'];
+        cryptoControls.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('change', () => this.renderCryptoChart());
+        });
+
+        const premiumControls = ['premiumPeriod', 'showBtcPremium', 'showGoldPremium'];
+        premiumControls.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('change', () => this.renderPremiumChart());
+        });
     }
+
+    // ── Utilities ─────────────────────────────────────────────────────────────
 
     getFearGreedLabel(value) {
         if (value <= 24) return '극도의 공포';
@@ -369,13 +425,8 @@ class FearGreedDashboard {
     }
 
     updateLastUpdateTime() {
-        const now = new Date();
-        document.getElementById('last-update').textContent = now.toLocaleString('ko-KR');
-    }
-
-    showError(message) {
-        const container = document.querySelector('.charts-container');
-        container.innerHTML = `<div class="error">${message}</div>`;
+        const el = document.getElementById('last-update');
+        if (el) el.textContent = new Date().toLocaleString('ko-KR');
     }
 }
 
